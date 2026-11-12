@@ -4,6 +4,9 @@
     "imposter_alphatest:entity_alphatest": {
       "+defines": [
         "USE_UV_ANIM"
+      ],
+      "+states": [
+        "DisableCulling"
       ]
     }
   }

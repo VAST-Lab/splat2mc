@@ -1,13 +1,91 @@
 #!/usr/bin/env python3
 """
 Export oriented 3D Gaussian Splats (.ply) into Bedrock TypeScript/JavaScript format.
-Uses 3D surface-voxel downsampling, removes oversized interior filler Gaussians,
-and preserves native 3DGS sRGB colors with vibrance enhancement.
+Emits an inset depth-writing core particle shell (flag=1) plus outer smooth
+Gaussian surface splats (flag=0) so back-side particles never bleed through front
+surfaces regardless of viewing angle.
 """
 import argparse
+import math
 from pathlib import Path
 import numpy as np
 from plyfile import PlyData
+
+
+def compute_local_inward_vectors(pts: np.ndarray, radius: float) -> np.ndarray:
+    """Compute unit inward direction toward local occupied neighborhood center-of-mass."""
+    n = len(pts)
+    inward = np.zeros_like(pts)
+    r2 = radius * radius
+    chunk = 512
+    for start in range(0, n, chunk):
+        end = min(start + chunk, n)
+        diff = pts[None, :, :] - pts[start:end, None, :]
+        d2 = np.sum(diff * diff, axis=-1)
+        mask = d2 < r2
+        counts = np.maximum(mask.sum(axis=1, keepdims=True), 1)
+        mean_vec = (mask[:, :, None] * diff).sum(axis=1) / counts
+        norms = np.linalg.norm(mean_vec, axis=1, keepdims=True)
+        valid_dir = norms[:, 0] > (0.04 * radius)
+        inward[start:end][valid_dir] = mean_vec[valid_dir] / norms[valid_dir]
+    return inward
+
+
+def voxelize_points(
+    px: np.ndarray,
+    py: np.ndarray,
+    pz: np.ndarray,
+    r: np.ndarray,
+    g: np.ndarray,
+    b: np.ndarray,
+    opacity: np.ndarray,
+    chroma: np.ndarray,
+    target_size: float,
+    budget: int,
+):
+    """Downsample valid splats into spatial voxels up to budget."""
+    lo_res, hi_res = 6.0, 140.0
+    for _ in range(18):
+        mid_res = (lo_res + hi_res) * 0.5
+        vsize = target_size / mid_res
+        vx = np.floor((px + target_size * 4.0) / vsize).astype(np.int64)
+        vy = np.floor((py + target_size * 4.0) / vsize).astype(np.int64)
+        vz = np.floor((pz + target_size * 4.0) / vsize).astype(np.int64)
+        keys = (vx << 40) | (vy << 20) | vz
+        if len(np.unique(keys)) < budget:
+            lo_res = mid_res
+        else:
+            hi_res = mid_res
+
+    vsize = target_size / ((lo_res + hi_res) * 0.5)
+    vx = np.floor((px + target_size * 4.0) / vsize).astype(np.int64)
+    vy = np.floor((py + target_size * 4.0) / vsize).astype(np.int64)
+    vz = np.floor((pz + target_size * 4.0) / vsize).astype(np.int64)
+    keys = (vx << 40) | (vy << 20) | vz
+    uniq_keys, first_idx, inv = np.unique(keys, return_index=True, return_inverse=True)
+
+    w = opacity * (1.0 + 1.5 * chroma)
+    w_sum = np.bincount(inv, weights=w)
+    op_sum = np.bincount(inv, weights=opacity)
+
+    vx_mean = np.bincount(inv, weights=px * w) / w_sum
+    vy_mean = np.bincount(inv, weights=py * w) / w_sum
+    vz_mean = np.bincount(inv, weights=pz * w) / w_sum
+    vr = np.bincount(inv, weights=r * w) / w_sum
+    vg = np.bincount(inv, weights=g * w) / w_sum
+    vb = np.bincount(inv, weights=b * w) / w_sum
+
+    lum = 0.299 * vr + 0.587 * vg + 0.114 * vb
+    vr = np.clip((lum + (vr - lum) * 1.30) * 1.12, 0.0, 1.0)
+    vg = np.clip((lum + (vg - lum) * 1.30) * 1.12, 0.0, 1.0)
+    vb = np.clip((lum + (vb - lum) * 1.30) * 1.12, 0.0, 1.0)
+    v_op = np.clip(0.82 + 0.16 * (1.0 - np.exp(-op_sum)), 0.82, 0.98)
+
+    keep = np.arange(len(uniq_keys))
+    if len(keep) > budget:
+        keep = keep[np.argsort(op_sum[keep])[::-1][:budget]]
+
+    return vsize, first_idx[keep], np.column_stack([vx_mean[keep], vy_mean[keep], vz_mean[keep]]), vr[keep], vg[keep], vb[keep], v_op[keep]
 
 
 def export_oriented_bedrock(
@@ -25,8 +103,7 @@ def export_oriented_bedrock(
     y = np.array(vertex["y"], dtype=np.float64)
     z = np.array(vertex["z"], dtype=np.float64)
 
-    # 1. Extract Colors in native 3DGS sRGB space (0.5 + C0 * f_dc is already sRGB;
-    #    applying an extra 1/2.2 gamma washes out dark/rich colors into pale tan/gray).
+    # 1. Extract Colors in native 3DGS sRGB space (0.5 + C0 * f_dc is already sRGB)
     C0 = 0.28209479177387814
     if "f_dc_0" in vertex.data.dtype.names:
         r = 0.5 + np.array(vertex["f_dc_0"], dtype=np.float64) * C0
@@ -39,7 +116,6 @@ def export_oriented_bedrock(
 
     r, g, b = np.clip(r, 0.0, 1.0), np.clip(g, 0.0, 1.0), np.clip(b, 0.0, 1.0)
 
-    # 2. Extract Opacity, Scales, and Quaternions
     opacity = (
         1.0 / (1.0 + np.exp(-np.array(vertex["opacity"], dtype=np.float64)))
         if "opacity" in vertex.data.dtype.names
@@ -58,22 +134,17 @@ def export_oriented_bedrock(
     norms = np.where(norms == 0, 1.0, norms)
     rw, rx, ry, rz = rw / norms, rx / norms, ry / norms, rz / norms
 
-    # 3. Filter out oversized interior/background filler Gaussians (> 85th percentile scale)
-    #    which otherwise dominate pure-opacity sorting with giant gray/tan clouds.
     scale_cap = np.percentile(s_max, 85)
     valid = np.where((opacity > 0.08) & (s_max <= scale_cap))[0]
     if len(valid) == 0:
         valid = np.arange(len(x))
 
-    # Sort valid splats by chroma-weighted opacity descending so the first index in each
-    # spatial voxel is the sharpest, most color-accurate surface splat.
     chroma_valid = np.maximum(np.maximum(r[valid], g[valid]), b[valid]) - np.minimum(
         np.minimum(r[valid], g[valid]), b[valid]
     )
     importance = opacity[valid] * (1.0 + 1.5 * chroma_valid)
     valid = valid[np.argsort(importance)[::-1]]
 
-    # 4. Normalization Bounds
     min_x, max_x = np.percentile(x[valid], 2), np.percentile(x[valid], 98)
     min_y, max_y = np.percentile(y[valid], 2), np.percentile(y[valid], 98)
     min_z, max_z = np.percentile(z[valid], 2), np.percentile(z[valid], 98)
@@ -85,145 +156,77 @@ def export_oriented_bedrock(
     py = y_sign * (y[valid] - cy) * scale_factor
     pz = -(z[valid] - cz) * scale_factor
 
-    # 5. 3D Voxel-Surface Downsampling to match max_particles budget
-    lo_res, hi_res = 8.0, 140.0
-    for _ in range(18):
-        mid_res = (lo_res + hi_res) * 0.5
-        vsize = target_size / mid_res
-        vx = np.floor((px + target_size * 4.0) / vsize).astype(np.int64)
-        vy = np.floor((py + target_size * 4.0) / vsize).astype(np.int64)
-        vz = np.floor((pz + target_size * 4.0) / vsize).astype(np.int64)
-        keys = (vx << 40) | (vy << 20) | vz
-        # Estimate after interior culling (~95% of occupied voxels are on surface shell)
-        if len(np.unique(keys)) * 0.95 < max_particles:
-            lo_res = mid_res
-        else:
-            hi_res = mid_res
+    # Allocate ~25% budget to inset depth-writing core particles, ~75% to outer surface splats
+    core_budget = max(64, int(max_particles * 0.25))
+    surf_budget = max(128, max_particles - core_budget)
 
-    vsize = target_size / ((lo_res + hi_res) * 0.5)
-    vx = np.floor((px + target_size * 4.0) / vsize).astype(np.int64)
-    vy = np.floor((py + target_size * 4.0) / vsize).astype(np.int64)
-    vz = np.floor((pz + target_size * 4.0) / vsize).astype(np.int64)
-    keys = (vx << 40) | (vy << 20) | vz
-    uniq_keys, first_idx, inv = np.unique(keys, return_index=True, return_inverse=True)
-
-    # Aggregate position, chroma-weighted color, and accumulated opacity per voxel
     rv, gv, bv, opv = r[valid], g[valid], b[valid], opacity[valid]
-    w = opv * (1.0 + 1.5 * chroma_valid)
-    w_sum = np.bincount(inv, weights=w)
-    op_sum = np.bincount(inv, weights=opv)
+    vs_c, f_c, c_pts, cr, cg, cb, cop = voxelize_points(px, py, pz, rv, gv, bv, opv, chroma_valid, target_size, core_budget)
+    vs_s, f_s, s_pts, sr, sg, sb, sop = voxelize_points(px, py, pz, rv, gv, bv, opv, chroma_valid, target_size, surf_budget)
 
-    vx_mean = np.bincount(inv, weights=px * w) / w_sum
-    vy_mean = np.bincount(inv, weights=py * w) / w_sum
-    vz_mean = np.bincount(inv, weights=pz * w) / w_sum
-    vr = np.bincount(inv, weights=rv * w) / w_sum
-    vg = np.bincount(inv, weights=gv * w) / w_sum
-    vb = np.bincount(inv, weights=bv * w) / w_sum
+    # Shift Y cleanly above ground block (min Y = 0.2)
+    y_shift = -min(float(np.min(c_pts[:, 1])), float(np.min(s_pts[:, 1]))) + 0.2
+    c_pts[:, 1] += y_shift
+    s_pts[:, 1] += y_shift
 
-    # Apply vibrance/saturation boost (1.35x) and gentle brightness lift (1.15x)
-    lum = 0.299 * vr + 0.587 * vg + 0.114 * vb
-    vr = np.clip((lum + (vr - lum) * 1.35) * 1.15, 0.0, 1.0)
-    vg = np.clip((lum + (vg - lum) * 1.35) * 1.15, 0.0, 1.0)
-    vb = np.clip((lum + (vb - lum) * 1.35) * 1.15, 0.0, 1.0)
-    v_op = np.clip(1.0 - np.exp(-op_sum * 1.4), 0.75, 1.0)
-
-    # Cull strictly buried interior voxels (surrounded on all 6 faces)
-    ux = vx[first_idx]
-    uy = vy[first_idx]
-    uz = vz[first_idx]
-    coord_set = set(zip(ux.tolist(), uy.tolist(), uz.tolist()))
-    surface_mask = np.array(
-        [
-            not (
-                (ix + 1, iy, iz) in coord_set
-                and (ix - 1, iy, iz) in coord_set
-                and (ix, iy + 1, iz) in coord_set
-                and (ix, iy - 1, iz) in coord_set
-                and (ix, iy, iz + 1) in coord_set
-                and (ix, iy, iz - 1) in coord_set
-            )
-            for ix, iy, iz in zip(ux.tolist(), uy.tolist(), uz.tolist())
-        ],
-        dtype=bool,
-    )
-
-    keep = np.where(surface_mask)[0]
-    if len(keep) > max_particles:
-        # Keep highest accumulated opacity voxels if slightly above max_particles
-        keep = keep[np.argsort(op_sum[keep])[::-1][:max_particles]]
-
-    # Shift Y so the model base sits cleanly above the ground block (min Y = 0.2)
-    y_offset = -np.min(vy_mean[keep]) + 0.2
-    vy_mean = vy_mean + y_offset
-
-    # Sort kept voxels inside-out from centroid so outer surface splats render on top
-    c_x, c_y, c_z = np.mean(vx_mean[keep]), np.mean(vy_mean[keep]), np.mean(vz_mean[keep])
-    dist_sq = (vx_mean[keep] - c_x) ** 2 + (vy_mean[keep] - c_y) ** 2 + (vz_mean[keep] - c_z) ** 2
-    keep = keep[np.argsort(dist_sq)]
-
-    # Clamp particle base scales to voxel neighborhood so GLOBAL_SCALE_MULTIPLIER=3.0
-    # produces overlapping ~0.35-0.50 block surface discs without huge blurry clouds.
-    min_s, max_s = vsize * 0.45, vsize * 0.68
+    # Inset core particles strictly inside the rock wall; nudge surface slightly outward
+    c_inward = compute_local_inward_vectors(c_pts, radius=2.4 * vs_c)
+    s_inward = compute_local_inward_vectors(s_pts, radius=2.4 * vs_s)
+    c_pts = c_pts + c_inward * (0.60 * vs_c)
+    s_pts = s_pts - s_inward * (0.18 * vs_s)
 
     print(
-        f"Baking {len(keep)} surface-voxel oriented splats (from {len(x)} raw PLY splats, vsize={vsize:.3f})..."
+        f"Baking {len(c_pts)} depth-core + {len(s_pts)} surface oriented splats "
+        f"(from {len(x)} raw PLY splats, vs_c={vs_c:.3f}, vs_s={vs_s:.3f})..."
     )
+
+    def format_entry(pt, r_val, g_val, b_val, op_val, orig_idx, base_scale, is_core: int):
+        w_q, i_x, i_y, i_z = rw[orig_idx], rx[orig_idx], ry[orig_idx], rz[orig_idx]
+        R = np.array([
+            [1 - 2 * (i_y**2 + i_z**2), 2 * (i_x * i_y - w_q * i_z), 2 * (i_x * i_z + w_q * i_y)],
+            [2 * (i_x * i_y + w_q * i_z), 1 - 2 * (i_x**2 + i_z**2), 2 * (i_y * i_z - w_q * i_x)],
+            [2 * (i_x * i_z - w_q * i_y), 2 * (i_y * i_z + w_q * i_x), 1 - 2 * (i_x**2 + i_y**2)],
+        ])
+        R[1, :] = y_sign * R[1, :]
+        R[2, :] = -R[2, :]
+
+        scales = np.array([sx[orig_idx], sy[orig_idx], sz[orig_idx]]) * scale_factor
+        min_idx = int(np.argmin(scales))
+        nx, ny, nz = R[:, min_idx]
+        axes = [0, 1, 2]
+        axes.remove(min_idx)
+        axis_u = R[:, axes[0]]
+
+        if is_core:
+            size_x = size_y = base_scale
+        else:
+            aspect = float(np.clip(scales[axes[0]] / max(scales[axes[1]], 1e-8), 0.58, 1.72))
+            size_x = base_scale * math.sqrt(aspect)
+            size_y = base_scale / math.sqrt(aspect)
+
+        world_y = np.array([0.0, 1.0, 0.0])
+        if abs(ny) > 0.999:
+            v_right = np.array([1.0, 0.0, 0.0])
+        else:
+            v_right = np.cross(world_y, [nx, ny, nz])
+            v_right = v_right / np.linalg.norm(v_right)
+        v_up = np.cross([nx, ny, nz], v_right)
+        roll = -np.degrees(np.arctan2(np.dot(axis_u, v_up), np.dot(axis_u, v_right)))
+
+        return (
+            f"  [{pt[0]:.3f}, {pt[1]:.3f}, {pt[2]:.3f}, "
+            f"{r_val:.3f}, {g_val:.3f}, {b_val:.3f}, "
+            f"{size_x:.3f}, {size_y:.3f}, "
+            f"{nx:.3f}, {ny:.3f}, {nz:.3f}, {roll:.3f}, {op_val:.3f}, {is_core}],\n"
+        )
+
     output_ts.parent.mkdir(parents=True, exist_ok=True)
     with open(output_ts, "w", encoding="utf-8") as f:
         f.write("// Auto-generated by splat2mc\nexport const splatData = [\n")
-
-        for k in keep:
-            orig_i = valid[first_idx[k]]
-            w_q, i_x, i_y, i_z = rw[orig_i], rx[orig_i], ry[orig_i], rz[orig_i]
-
-            # Standard Quaternion to Rotation Matrix
-            R = np.array(
-                [
-                    [1 - 2 * (i_y**2 + i_z**2), 2 * (i_x * i_y - w_q * i_z), 2 * (i_x * i_z + w_q * i_y)],
-                    [2 * (i_x * i_y + w_q * i_z), 1 - 2 * (i_x**2 + i_z**2), 2 * (i_y * i_z - w_q * i_x)],
-                    [2 * (i_x * i_z - w_q * i_y), 2 * (i_y * i_z + w_q * i_x), 1 - 2 * (i_x**2 + i_y**2)],
-                ]
-            )
-
-            # Transform to Minecraft coordinate space
-            R[1, :] = y_sign * R[1, :]
-            R[2, :] = -R[2, :]
-
-            scales = np.array([sx[orig_i], sy[orig_i], sz[orig_i]]) * scale_factor
-            min_idx = int(np.argmin(scales))
-
-            # Normal is the thinnest axis
-            nx, ny, nz = R[:, min_idx]
-
-            # The other two axes define the splat plane
-            axes = [0, 1, 2]
-            axes.remove(min_idx)
-            axis_u = R[:, axes[0]]
-
-            size_x = float(np.clip(scales[axes[0]] * 2.2, min_s, max_s))
-            size_y = float(np.clip(scales[axes[1]] * 2.2, min_s, max_s))
-
-            # Calculate Roll based on Bedrock billboard alignment
-            world_y = np.array([0.0, 1.0, 0.0])
-            if abs(ny) > 0.999:
-                v_right = np.array([1.0, 0.0, 0.0])
-            else:
-                v_right = np.cross(world_y, [nx, ny, nz])
-                v_right = v_right / np.linalg.norm(v_right)
-
-            v_up = np.cross([nx, ny, nz], v_right)
-
-            u_proj_x = np.dot(axis_u, v_right)
-            u_proj_y = np.dot(axis_u, v_up)
-            roll = -np.degrees(np.arctan2(u_proj_y, u_proj_x))
-
-            f.write(
-                f"  [{vx_mean[k]:.3f}, {vy_mean[k]:.3f}, {vz_mean[k]:.3f}, "
-                f"{vr[k]:.3f}, {vg[k]:.3f}, {vb[k]:.3f}, "
-                f"{size_x:.3f}, {size_y:.3f}, "
-                f"{nx:.3f}, {ny:.3f}, {nz:.3f}, {roll:.3f}, {v_op[k]:.3f}],\n"
-            )
-
+        for i in range(len(c_pts)):
+            f.write(format_entry(c_pts[i], cr[i], cg[i], cb[i], cop[i], valid[f_c[i]], vs_c * 0.62, is_core=1))
+        for i in range(len(s_pts)):
+            f.write(format_entry(s_pts[i], sr[i], sg[i], sb[i], sop[i], valid[f_s[i]], vs_s * 0.85, is_core=0))
         f.write("];\n")
     print(f"✓ Saved to {output_ts}")
 

@@ -12,32 +12,27 @@ def generate_splat_texture(
     size: int = 64,
     output_file: Path = Path("./bedrock/02_Oriented_Splat_Pack/SplatRenderer_RP/textures/particles/splat_tex.png"),
 ):
-    center = size / 2.0
+    center = (size - 1) / 2.0
     output_path = Path(output_file)
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    # Create coordinate grid
     y, x = np.ogrid[:size, :size]
+    dist_from_center = np.sqrt((x - center) ** 2 + (y - center) ** 2)
 
-    # Calculate distance from center for each pixel center
-    dist_from_center = np.sqrt((x - center + 0.5) ** 2 + (y - center + 0.5) ** 2)
+    # Smooth Gaussian core multiplied by a circular smoothstep taper so alpha reaches
+    # strictly 0 before the quad perimeter (eliminating visible square quad edges).
+    sigma = size * 0.25
+    t_win = np.clip((size * 0.48 - dist_from_center) / (size * 0.18), 0.0, 1.0)
+    smooth_window = t_win * t_win * (3.0 - 2.0 * t_win)
+    alpha = np.exp(-0.5 * (dist_from_center / sigma) ** 2) * smooth_window
 
-    # Gaussian alpha falloff (sigma = size / 4.0 standard 3DGS ratio)
-    sigma = size / 4.0
-    alpha = np.exp(-0.5 * (dist_from_center / sigma) ** 2)
-
-    # Scale alpha to 0-255 uint8
-    alpha = np.clip(alpha * 255, 0, 255).astype(np.uint8)
+    alpha_u8 = np.clip(alpha * 255, 0, 255).astype(np.uint8)
 
     # Pure white RGB channels (tinting handled dynamically by particle emitter)
-    r = np.full((size, size), 255, dtype=np.uint8)
-    g = np.full((size, size), 255, dtype=np.uint8)
-    b = np.full((size, size), 255, dtype=np.uint8)
-
-    rgba = np.dstack((r, g, b, alpha))
-    img = Image.fromarray(rgba, "RGBA")
-    img.save(output_path)
-    print(f"✓ Generated {output_path} ({size}x{size})")
+    white = np.full((size, size), 255, dtype=np.uint8)
+    rgba = np.dstack((white, white, white, alpha_u8))
+    Image.fromarray(rgba, "RGBA").save(output_path)
+    print(f"✓ Generated {output_path} ({size}x{size}, edge alpha={int(alpha_u8[0, size // 2])})")
 
 
 if __name__ == "__main__":

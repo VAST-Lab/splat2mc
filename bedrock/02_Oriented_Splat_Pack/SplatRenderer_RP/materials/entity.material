@@ -1,0 +1,16 @@
+{
+	"materials": {
+		"version": "1.0.0",
+		"splat_cloud_core:entity_alphatest": {
+			"+states": [
+				"DisableCulling"
+			]
+		},
+		"splat_cloud_blend:entity_alphablend": {
+			"+states": [
+				"DisableCulling",
+				"DisableDepthWrite"
+			]
+		}
+	}
+}

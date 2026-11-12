@@ -1,6 +1,14 @@
 {
 	"materials": {
 		"version": "1.0.0",
+		"splat_core_opaque:particles_alpha": {
+			"-defines": [
+				"ENABLE_FOG"
+			],
+			"+states": [
+				"DisableCulling"
+			]
+		},
 		"splat_double_sided:particles_blend": {
 			"-defines": [
 				"ENABLE_FOG"

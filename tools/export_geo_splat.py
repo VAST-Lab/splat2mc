@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """
 Bake 3D Gaussian Splats (.ply) directly into a static Minecraft Bedrock .geo.json model
-and an accompanying RGBA texture atlas. Zero particles or scripts required at runtime.
-Uses 3D surface-voxel downsampling, removes oversized interior filler Gaussians,
-and preserves native 3DGS sRGB colors with vibrance enhancement.
+and an accompanying high-resolution RGBA Gaussian texture atlas.
+Generates an inset depth-writing core shell (core_*) for all surface voxels so
+back-side splats are hardware-occluded from every 360-degree angle, paired with
+smooth feathered Gaussian surface splats (s_*) with zero square-edge clipping.
 """
 import json
 import math
@@ -32,11 +33,62 @@ def rotation_matrix_to_bedrock_euler(R_plane: np.ndarray) -> tuple[float, float,
     return -math.degrees(rx), -math.degrees(ry), math.degrees(rz)
 
 
+def compute_local_inward_vectors(pts: np.ndarray, radius: float) -> np.ndarray:
+    """Compute unit inward direction toward local occupied neighborhood center-of-mass."""
+    n = len(pts)
+    inward = np.zeros_like(pts)
+    r2 = radius * radius
+    chunk = 512
+    for start in range(0, n, chunk):
+        end = min(start + chunk, n)
+        diff = pts[None, :, :] - pts[start:end, None, :]
+        d2 = np.sum(diff * diff, axis=-1)
+        mask = d2 < r2
+        counts = np.maximum(mask.sum(axis=1, keepdims=True), 1)
+        mean_vec = (mask[:, :, None] * diff).sum(axis=1) / counts
+        norms = np.linalg.norm(mean_vec, axis=1, keepdims=True)
+        valid_dir = norms[:, 0] > (0.04 * radius)
+        inward[start:end][valid_dir] = mean_vec[valid_dir] / norms[valid_dir]
+    return inward
+
+
+def build_splat_bone(
+    name: str,
+    px_k: float,
+    py_k: float,
+    pz_k: float,
+    w_size: float,
+    h_size: float,
+    rot_x: float,
+    rot_y: float,
+    rot_z: float,
+    u: int,
+    v_uv: int,
+    tile_px: int,
+) -> dict:
+    """Create a single-quad Bedrock bone (rendered double-sided via DisableCulling)."""
+    return {
+        "name": name,
+        "parent": "root",
+        "pivot": [round(px_k, 3), round(py_k, 3), round(pz_k, 3)],
+        "rotation": [round(rot_x, 2), round(rot_y, 2), round(rot_z, 2)],
+        "cubes": [
+            {
+                "origin": [round(px_k - w_size / 2, 3), round(py_k - h_size / 2, 3), round(pz_k, 3)],
+                "size": [round(w_size, 3), round(h_size, 3), 0],
+                "uv": {
+                    "north": {"uv": [u, v_uv], "uv_size": [tile_px, tile_px]},
+                },
+            }
+        ],
+    }
+
+
 def export_geo_splat(
     ply_file: Path,
     output_geo: Path,
     output_tex: Path,
-    max_splats: int = 1024,
+    max_splats: int = 2500,
     target_size: float = 48.0,
     flip_y: bool = True,
 ):
@@ -98,7 +150,9 @@ def export_geo_splat(
     py = y_sign * (y[valid] - cy) * scale_factor
     pz = -(z[valid] - cz) * scale_factor
 
-    # 3. 3D Voxel-Surface Downsampling to match max_splats budget
+    # 3. Voxelize to half of max_splats so every voxel gets an inset depth-writing core
+    #    bone + a smooth outer Gaussian surface bone (preserving 360-deg Z occlusion).
+    voxel_budget = max(64, max_splats // 2)
     lo_res, hi_res = 6.0, 96.0
     for _ in range(18):
         mid_res = (lo_res + hi_res) * 0.5
@@ -107,7 +161,7 @@ def export_geo_splat(
         vy = np.floor((py + target_size * 4.0) / vsize).astype(np.int64)
         vz = np.floor((pz + target_size * 4.0) / vsize).astype(np.int64)
         keys = (vx << 40) | (vy << 20) | vz
-        if len(np.unique(keys)) * 0.95 < max_splats:
+        if len(np.unique(keys)) < voxel_budget:
             lo_res = mid_res
         else:
             hi_res = mid_res
@@ -131,115 +185,121 @@ def export_geo_splat(
     vg = np.bincount(inv, weights=gv * w) / w_sum
     vb = np.bincount(inv, weights=bv * w) / w_sum
 
-    # Vibrance boost (1.35x) and gentle brightness lift (1.15x)
+    # Vibrance boost (1.30x) and gentle brightness lift (1.12x)
     lum = 0.299 * vr + 0.587 * vg + 0.114 * vb
-    vr = np.clip((lum + (vr - lum) * 1.35) * 1.15, 0.0, 1.0)
-    vg = np.clip((lum + (vg - lum) * 1.35) * 1.15, 0.0, 1.0)
-    vb = np.clip((lum + (vb - lum) * 1.35) * 1.15, 0.0, 1.0)
-    v_op = np.clip(1.0 - np.exp(-op_sum * 1.4), 0.78, 1.0)
+    vr = np.clip((lum + (vr - lum) * 1.30) * 1.12, 0.0, 1.0)
+    vg = np.clip((lum + (vg - lum) * 1.30) * 1.12, 0.0, 1.0)
+    vb = np.clip((lum + (vb - lum) * 1.30) * 1.12, 0.0, 1.0)
+    v_op = np.clip(0.82 + 0.16 * (1.0 - np.exp(-op_sum)), 0.82, 0.98)
 
-    ux, uy, uz = vx[first_idx], vy[first_idx], vz[first_idx]
-    coord_set = set(zip(ux.tolist(), uy.tolist(), uz.tolist()))
-    surface_mask = np.array(
-        [
-            not (
-                (ix + 1, iy, iz) in coord_set
-                and (ix - 1, iy, iz) in coord_set
-                and (ix, iy + 1, iz) in coord_set
-                and (ix, iy - 1, iz) in coord_set
-                and (ix, iy, iz + 1) in coord_set
-                and (ix, iy, iz - 1) in coord_set
-            )
-            for ix, iy, iz in zip(ux.tolist(), uy.tolist(), uz.tolist())
-        ],
-        dtype=bool,
-    )
-
-    keep = np.where(surface_mask)[0]
-    if len(keep) > max_splats:
-        keep = keep[np.argsort(op_sum[keep])[::-1][:max_splats]]
+    keep = np.arange(len(uniq_keys))
+    if len(keep) > voxel_budget:
+        keep = keep[np.argsort(op_sum[keep])[::-1][:voxel_budget]]
 
     # Shift Y so model base sits cleanly on ground (min Y = 1.0 model pixel)
     vy_mean = vy_mean - np.min(vy_mean[keep]) + 1.0
 
-    # Sort inside-out from centroid so outer surface planes render last in bone order
-    c_x, c_y, c_z = np.mean(vx_mean[keep]), np.mean(vy_mean[keep]), np.mean(vz_mean[keep])
-    dist_sq = (vx_mean[keep] - c_x) ** 2 + (vy_mean[keep] - c_y) ** 2 + (vz_mean[keep] - c_z) ** 2
-    keep = keep[np.argsort(dist_sq)]
+    # Compute local inward vector for each voxel to separate Z-writing core from outer surface
+    pts = np.column_stack([vx_mean[keep], vy_mean[keep], vz_mean[keep]])
+    inward = compute_local_inward_vectors(pts, radius=2.4 * vsize)
+    core_pts = pts + inward * (0.65 * vsize)
+    surf_pts = pts - inward * (0.20 * vsize)
 
-    # Build Texture Atlas: each splat gets an 8x8 Gaussian soft-circle tile
-    grid_dim = math.ceil(math.sqrt(len(keep)))
-    tile_px = 8
+    # Sort surface splats inside-out from centroid
+    c_x, c_y, c_z = np.mean(surf_pts[:, 0]), np.mean(surf_pts[:, 1]), np.mean(surf_pts[:, 2])
+    dist_sq = (surf_pts[:, 0] - c_x) ** 2 + (surf_pts[:, 1] - c_y) ** 2 + (surf_pts[:, 2] - c_z) ** 2
+    surf_order = np.argsort(dist_sq)
+
+    # Build 32x32 per-splat RGBA atlas:
+    # - Core tiles use a crisp circular disc (for entity_alphatest Z-buffer occlusion)
+    # - Surface tiles use a smooth circular Gaussian fading strictly to alpha=0 at border
+    n_voxels = len(keep)
+    total_tiles = n_voxels * 2
+    grid_dim = math.ceil(math.sqrt(total_tiles))
+    tile_px = 32
     atlas_px = grid_dim * tile_px
     atlas = Image.new("RGBA", (atlas_px, atlas_px), (0, 0, 0, 0))
 
     yy, xx = np.ogrid[:tile_px, :tile_px]
     center = (tile_px - 1) / 2.0
-    gauss_mask = np.exp(-0.5 * ((xx - center) ** 2 + (yy - center) ** 2) / ((tile_px / 3.0) ** 2))
+    dist = np.sqrt((xx - center) ** 2 + (yy - center) ** 2)
+    sigma = tile_px * 0.28
+    t_win = np.clip((tile_px * 0.48 - dist) / (tile_px * 0.18), 0.0, 1.0)
+    smooth_win = t_win * t_win * (3.0 - 2.0 * t_win)
+    gauss_mask = np.exp(-0.5 * (dist / sigma) ** 2) * smooth_win
+    core_mask = (dist <= tile_px * 0.42).astype(np.float64)
 
     bones = [{"name": "root", "pivot": [0, 0, 0]}]
-    min_plane_s, max_plane_s = vsize * 1.25, vsize * 1.85
+    core_size = vsize * 2.25
+    base_surf_s = vsize * 4.0
 
-    for idx_pos, k in enumerate(keep):
-        orig_i = valid[first_idx[k]]
-        col = idx_pos % grid_dim
-        row = idx_pos // grid_dim
-        u, v_uv = col * tile_px, row * tile_px
+    def emit_layer(order_idx: np.ndarray, layer_pts: np.ndarray, prefix: str, mask: np.ndarray, is_core: bool, start_idx: int):
+        for offset, local_i in enumerate(order_idx):
+            k = keep[local_i]
+            idx_pos = start_idx + offset
+            orig_i = valid[first_idx[k]]
+            col = idx_pos % grid_dim
+            row = idx_pos // grid_dim
+            u, v_uv = col * tile_px, row * tile_px
 
-        tile_rgba = np.zeros((tile_px, tile_px, 4), dtype=np.uint8)
-        tile_rgba[..., 0] = int(vr[k] * 255)
-        tile_rgba[..., 1] = int(vg[k] * 255)
-        tile_rgba[..., 2] = int(vb[k] * 255)
-        tile_rgba[..., 3] = np.clip(gauss_mask * v_op[k] * 255, 0, 255).astype(np.uint8)
-        atlas.paste(Image.fromarray(tile_rgba, "RGBA"), (u, v_uv))
+            tile_rgba = np.zeros((tile_px, tile_px, 4), dtype=np.uint8)
+            tile_rgba[..., 0] = int(vr[k] * 255)
+            tile_rgba[..., 1] = int(vg[k] * 255)
+            tile_rgba[..., 2] = int(vb[k] * 255)
+            alpha_scale = 1.0 if is_core else v_op[k]
+            tile_rgba[..., 3] = np.clip(mask * alpha_scale * 255, 0, 255).astype(np.uint8)
+            atlas.paste(Image.fromarray(tile_rgba, "RGBA"), (u, v_uv))
 
-        w_q, i_x, i_y, i_z = rw[orig_i], rx[orig_i], ry[orig_i], rz[orig_i]
-        R = np.array([
-            [1 - 2 * (i_y**2 + i_z**2), 2 * (i_x * i_y - w_q * i_z), 2 * (i_x * i_z + w_q * i_y)],
-            [2 * (i_x * i_y + w_q * i_z), 1 - 2 * (i_x**2 + i_z**2), 2 * (i_y * i_z - w_q * i_x)],
-            [2 * (i_x * i_z - w_q * i_y), 2 * (i_y * i_z + w_q * i_x), 1 - 2 * (i_x**2 + i_y**2)],
-        ])
-        R[1, :] = y_sign * R[1, :]
-        R[2, :] = -R[2, :]
+            w_q, i_x, i_y, i_z = rw[orig_i], rx[orig_i], ry[orig_i], rz[orig_i]
+            R = np.array([
+                [1 - 2 * (i_y**2 + i_z**2), 2 * (i_x * i_y - w_q * i_z), 2 * (i_x * i_z + w_q * i_y)],
+                [2 * (i_x * i_y + w_q * i_z), 1 - 2 * (i_x**2 + i_z**2), 2 * (i_y * i_z - w_q * i_x)],
+                [2 * (i_x * i_z - w_q * i_y), 2 * (i_y * i_z + w_q * i_x), 1 - 2 * (i_x**2 + i_y**2)],
+            ])
+            R[1, :] = y_sign * R[1, :]
+            R[2, :] = -R[2, :]
 
-        scales = np.array([sx[orig_i], sy[orig_i], sz[orig_i]]) * scale_factor
-        min_idx = int(np.argmin(scales))
-        axes = [0, 1, 2]
-        axes.remove(min_idx)
+            scales = np.array([sx[orig_i], sy[orig_i], sz[orig_i]]) * scale_factor
+            min_idx = int(np.argmin(scales))
+            axes = [0, 1, 2]
+            axes.remove(min_idx)
 
-        axis_u = R[:, axes[0]]
-        axis_v = R[:, axes[1]]
-        normal = np.cross(axis_u, axis_v)
-        norm_len = np.linalg.norm(normal)
-        if norm_len > 1e-6:
-            normal = normal / norm_len
+            axis_u = R[:, axes[0]]
+            axis_v = R[:, axes[1]]
+            normal = np.cross(axis_u, axis_v)
+            norm_len = np.linalg.norm(normal)
+            if norm_len > 1e-6:
+                normal = normal / norm_len
 
-        R_plane = np.column_stack((axis_u, axis_v, normal))
-        rot_x, rot_y, rot_z = rotation_matrix_to_bedrock_euler(R_plane)
+            R_plane = np.column_stack((axis_u, axis_v, normal))
+            rot_x, rot_y, rot_z = rotation_matrix_to_bedrock_euler(R_plane)
 
-        px_k = float(vx_mean[k])
-        py_k = float(vy_mean[k])
-        pz_k = float(vz_mean[k])
+            if is_core:
+                w_size = h_size = core_size
+            else:
+                aspect = float(np.clip(scales[axes[0]] / max(scales[axes[1]], 1e-8), 0.55, 1.8))
+                w_size = base_surf_s * math.sqrt(aspect)
+                h_size = base_surf_s / math.sqrt(aspect)
 
-        w_size = float(np.clip(scales[axes[0]] * 3.0, min_plane_s, max_plane_s))
-        h_size = float(np.clip(scales[axes[1]] * 3.0, min_plane_s, max_plane_s))
+            bones.append(
+                build_splat_bone(
+                    f"{prefix}{offset}",
+                    float(layer_pts[local_i, 0]),
+                    float(layer_pts[local_i, 1]),
+                    float(layer_pts[local_i, 2]),
+                    w_size,
+                    h_size,
+                    rot_x,
+                    rot_y,
+                    rot_z,
+                    u,
+                    v_uv,
+                    tile_px,
+                )
+            )
 
-        bones.append({
-            "name": f"s_{idx_pos}",
-            "parent": "root",
-            "pivot": [round(px_k, 3), round(py_k, 3), round(pz_k, 3)],
-            "rotation": [round(rot_x, 2), round(rot_y, 2), round(rot_z, 2)],
-            "cubes": [
-                {
-                    "origin": [round(px_k - w_size / 2, 3), round(py_k - h_size / 2, 3), round(pz_k, 3)],
-                    "size": [round(w_size, 3), round(h_size, 3), 0],
-                    "uv": {
-                        "north": {"uv": [u, v_uv], "uv_size": [tile_px, tile_px]},
-                        "south": {"uv": [u, v_uv], "uv_size": [tile_px, tile_px]},
-                    },
-                }
-            ],
-        })
+    emit_layer(np.arange(n_voxels), core_pts, "core_", core_mask, is_core=True, start_idx=0)
+    emit_layer(surf_order, surf_pts, "s_", gauss_mask, is_core=False, start_idx=n_voxels)
 
     geo_json = {
         "format_version": "1.12.0",
@@ -262,13 +322,16 @@ def export_geo_splat(
     output_tex.parent.mkdir(parents=True, exist_ok=True)
     output_geo.write_text(json.dumps(geo_json, indent=2), encoding="utf-8")
     atlas.save(output_tex)
-    print(f"✓ Exported {len(keep)} double-sided static 3D splat planes to {output_geo} and {output_tex}")
+    print(
+        f"✓ Exported {n_voxels} inset core + {n_voxels} smooth Gaussian surface planes "
+        f"({atlas_px}x{atlas_px} atlas) to {output_geo} and {output_tex}"
+    )
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Bake PLY splats into a static Bedrock .geo.json model.")
     parser.add_argument("ply_file", type=Path, help="Input .ply file")
-    parser.add_argument("-n", "--max-splats", type=int, default=1024, help="Number of splat planes (default: 1024)")
+    parser.add_argument("-n", "--max-splats", type=int, default=2500, help="Total splat planes (default: 2500)")
     parser.add_argument("-s", "--size", type=float, default=48.0, help="Target size in model pixels (16 = 1 block)")
     parser.add_argument("--no-flip-y", action="store_true", help="Do not flip Y/Z axes")
     parser.add_argument(

@@ -45,8 +45,10 @@ export function scriptBox(log, targetLocation) {
 			vars.setFloat("variable.roll", s[11]);
 			vars.setFloat("variable.opacity", s[12] ?? 1.0);
 
-			// Single emission renders both front and back faces via 'splat_double_sided' material
-			targetLocation.dimension.spawnParticle("vastlab:splat", particleLoc, vars);
+			// Single emission renders both front and back faces via 'DisableCulling';
+			// core particles (s[13] === 1) write depth to occlude back-side splats from all angles
+			const particleId = s[13] ? "vastlab:splat_core" : "vastlab:splat";
+			targetLocation.dimension.spawnParticle(particleId, particleLoc, vars);
 		}
 
 		cursor = end >= totalSplats ? 0 : end;

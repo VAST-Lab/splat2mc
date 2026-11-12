@@ -4,7 +4,8 @@
 		"description": {
 			"identifier": "custom:splat_cloud",
 			"materials": {
-				"default": "entity_alphablend"
+				"default": "splat_cloud_blend",
+				"core": "splat_cloud_core"
 			},
 			"textures": {
 				"default": "textures/entity/splat_cloud"
@@ -12,7 +13,7 @@
 			"geometry": {
 				"default": "geometry.splat_cloud"
 			},
-			"render_controllers": ["controller.render.default"]
+			"render_controllers": ["controller.render.splat_cloud"]
 		}
 	}
 }

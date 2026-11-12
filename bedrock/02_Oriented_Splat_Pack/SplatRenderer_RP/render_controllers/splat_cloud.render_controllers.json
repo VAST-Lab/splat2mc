@@ -1,0 +1,13 @@
+{
+	"format_version": "1.8.0",
+	"render_controllers": {
+		"controller.render.splat_cloud": {
+			"geometry": "Geometry.default",
+			"materials": [
+				{ "*": "Material.default" },
+				{ "core_*": "Material.core" }
+			],
+			"textures": ["Texture.default"]
+		}
+	}
+}
