@@ -1,0 +1,24 @@
+{
+	"format_version": 2,
+	"header": {
+		"name": "Spherical Imposter BP",
+		"description": "Zero-latency client-side spherical imposter entity",
+		"uuid": "4f183cf9-8b92-491c-b26a-8b839ef74911",
+		"version": [1, 0, 0],
+		"min_engine_version": [1, 21, 0]
+	},
+	"modules": [
+		{
+			"description": "Imposter behavior components",
+			"type": "data",
+			"uuid": "c3539bc7-e314-469b-b89e-3d0d34a41f6e",
+			"version": [1, 0, 0]
+		}
+	],
+	"dependencies": [
+		{
+			"uuid": "a793a382-f5c7-43cf-87b6-c564175b9de3",
+			"version": [1, 0, 0]
+		}
+	]
+}

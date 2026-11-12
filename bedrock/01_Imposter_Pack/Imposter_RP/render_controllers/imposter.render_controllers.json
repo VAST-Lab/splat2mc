@@ -1,0 +1,14 @@
+{
+	"format_version": "1.8.0",
+	"render_controllers": {
+		"controller.render.imposter": {
+			"geometry": "Geometry.default",
+			"materials": [{ "*": "Material.default" }],
+			"textures": ["Texture.default"],
+			"uv_anim": {
+				"offset": ["v.col / v.cols", "v.row / v.rows"],
+				"scale": ["1.0 / v.cols", "1.0 / v.rows"]
+			}
+		}
+	}
+}

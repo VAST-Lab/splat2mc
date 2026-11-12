@@ -1,0 +1,36 @@
+{
+	"format_version": "1.10.0",
+	"minecraft:client_entity": {
+		"description": {
+			"identifier": "custom:imposter",
+			"materials": {
+				"default": "entity_alphatest"
+			},
+			"textures": {
+				"default": "textures/entity/spritesheet"
+			},
+			"geometry": {
+				"default": "geometry.imposter"
+			},
+			"animations": {
+				"align_to_baked_frame": "animation.imposter.align_to_baked_frame"
+			},
+			"scripts": {
+				"initialize": ["v.cols = 16;", "v.rows = 3;", "v.pitch_min = -45.0;", "v.pitch_max = 45.0;"],
+				"pre_animation": [
+					"v.yaw_step = 360.0 / v.cols;",
+					"v.raw_yaw = query.rotation_to_camera(1) - query.body_y_rotation;",
+					"v.norm_yaw = math.mod(math.mod(v.raw_yaw + (v.yaw_step * 0.5), 360.0) + 360.0, 360.0);",
+					"v.col = math.clamp(math.floor(v.norm_yaw / v.yaw_step), 0, v.cols - 1);",
+					"v.snapped_yaw = v.col * v.yaw_step;",
+					"v.raw_pitch = math.clamp(query.rotation_to_camera(0), v.pitch_min, v.pitch_max);",
+					"v.pitch_step = (v.pitch_max - v.pitch_min) / math.max(1, v.rows - 1);",
+					"v.row = math.clamp(math.round((v.pitch_max - v.raw_pitch) / v.pitch_step), 0, v.rows - 1);",
+					"v.snapped_pitch = v.pitch_max - (v.row * v.pitch_step);"
+				],
+				"animate": ["align_to_baked_frame"]
+			},
+			"render_controllers": ["controller.render.imposter"]
+		}
+	}
+}

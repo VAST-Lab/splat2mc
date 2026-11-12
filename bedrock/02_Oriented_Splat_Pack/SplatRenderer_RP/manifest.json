@@ -1,0 +1,24 @@
+{
+	"format_version": 2,
+	"header": {
+		"name": "SplatRenderer RP",
+		"description": "Double-sided DisableCulling particles and static geometry for 3D Gaussian Splats",
+		"uuid": "78ec6229-ce0d-4d97-9bf3-8fe3584a86ea",
+		"version": [1, 0, 0],
+		"min_engine_version": [1, 21, 0]
+	},
+	"modules": [
+		{
+			"description": "Custom splat particles and textures",
+			"type": "resources",
+			"uuid": "ebdde273-3e6a-4dc4-9337-2698f9767496",
+			"version": [1, 0, 0]
+		}
+	],
+	"dependencies": [
+		{
+			"uuid": "c204272a-f9df-4bb0-bd6a-d42d790854f6",
+			"version": [1, 0, 0]
+		}
+	]
+}

@@ -1,0 +1,24 @@
+{
+	"format_version": 2,
+	"header": {
+		"name": "Spherical Imposter RP",
+		"description": "Zero-latency client-side spherical imposter visuals and Molang angle-pinning",
+		"uuid": "a793a382-f5c7-43cf-87b6-c564175b9de3",
+		"version": [1, 0, 0],
+		"min_engine_version": [1, 21, 0]
+	},
+	"modules": [
+		{
+			"description": "Imposter geometry, animations, and render controllers",
+			"type": "resources",
+			"uuid": "7876a47a-c114-44b4-82a9-0d3ee787e915",
+			"version": [1, 0, 0]
+		}
+	],
+	"dependencies": [
+		{
+			"uuid": "4f183cf9-8b92-491c-b26a-8b839ef74911",
+			"version": [1, 0, 0]
+		}
+	]
+}

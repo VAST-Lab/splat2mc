@@ -3,7 +3,10 @@ import sys
 import struct
 import argparse
 from pathlib import Path
-from converter import load_ply, normalize_splats
+try:
+    from .converter import load_ply, normalize_splats
+except ImportError:
+    from converter import load_ply, normalize_splats
 
 def export_mod(ply_file: Path, output_file: Path, size: float = 10.0, flip_y: bool = False):
     print(f"Loading {ply_file}...")

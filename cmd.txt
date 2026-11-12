@@ -1,3 +1,11 @@
-uv run splat2mc convert Gem01.ply -o ./datapacks -n 15000 -p 0.25 -s 16 --flip-y
+# Java Edition Datapack:
+uv run splat2mc convert Gem01.ply -o ./bedrock/_archive/datapack_splat_particles -n 15000 -p 0.25 -s 16 --flip-y
 
-python export_oriented.py Gem01.ply -n 5000
+# Bedrock Edition Path B (Oriented Particle Stream):
+uv run python tools/export_oriented.py Gem01.ply -n 5000
+
+# Bedrock Edition Path B (Static Geometry .geo.json + Texture Atlas):
+uv run python tools/export_geo_splat.py Gem01.ply -n 1024
+
+# Bedrock Edition Path A (Atlas Generation from rendered frames):
+uv run python tools/make_spritesheet.py -i spritesheet -o bedrock/01_Imposter_Pack/Imposter_RP/textures/entity/spritesheet.png -r 3

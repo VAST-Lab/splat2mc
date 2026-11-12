@@ -12,7 +12,8 @@ MAX_FILE_COUNT = 8
 
 ALLOWED_ENDINGS = (
     '.md', '.txt', '.json', '.yaml', '.yml', '.gitignore',
-    '.cs', '.csproj', '.sln', '.py', '.mcfunction',
+    '.cs', '.csproj', '.sln', '.py',
+    '.mcfunction', '.material', '.cmd',
     '.targets', '.ps1', '.bash', '.bat', '.sh',
     '.html', '.js', '.css', '.jsx', '.ts', '.tsx', '.astro',
     '.axaml', '.axaml.cs', '.xml',
@@ -28,7 +29,7 @@ EXCLUDED_FOLDERS = (
     '.git', '.vs',
     'Library', 'Logs', 'ProjectSettings', 'Builds', 'Temp', 'obj', 'bin',
     'Controls', 'reference', 'build', 'build_cuda', 'build_vulkan', 'build_linux',
-    'node_modules', '.next', 'dist'
+    'node_modules', '.next', 'dist', '.venv', '.pytest_cache'
 )
 FORCE_INCLUDE_FILES = {
     'volstream_crash.log',

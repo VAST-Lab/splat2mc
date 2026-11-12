@@ -8,6 +8,7 @@ dependencies = [
     "numpy>=1.24.0",
     "plyfile>=1.0.0",
     "click>=8.0.0",
+    "pillow>=12.3.0",
 ]
 
 [project.scripts]
@@ -20,7 +21,7 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["src/splat2mc"]
 
-[tool.uv]
-dev-dependencies = [
+[dependency-groups]
+dev = [
     "pytest>=7.0.0",
 ]

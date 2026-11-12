@@ -1,0 +1,29 @@
+{
+    "format_version": 2,
+    "header": {
+        "name": "Splat RP",
+        "description": "Resource pack for 3D splats",
+        "uuid": "90ade14e-03bb-436a-9743-008400c67fb5",
+        "version": [
+            1,
+            0,
+            0
+        ],
+        "min_engine_version": [
+            1,
+            20,
+            40
+        ]
+    },
+    "modules": [
+        {
+            "type": "resources",
+            "uuid": "fd735eb0-82a9-47ad-b69e-146780957b9f",
+            "version": [
+                1,
+                0,
+                0
+            ]
+        }
+    ]
+}

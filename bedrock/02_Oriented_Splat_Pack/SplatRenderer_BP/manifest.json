@@ -1,0 +1,36 @@
+{
+	"format_version": 2,
+	"header": {
+		"name": "SplatRenderer BP",
+		"description": "Behavior pack for tick-staggered oriented 3D Gaussian Splats & Static Clouds",
+		"uuid": "c204272a-f9df-4bb0-bd6a-d42d790854f6",
+		"version": [1, 0, 0],
+		"min_engine_version": [1, 21, 0]
+	},
+	"modules": [
+		{
+			"description": "Entity definitions for static splat clouds",
+			"type": "data",
+			"uuid": "6ef19c0a-4a51-4e78-9d8c-3b27821b9d14",
+			"version": [1, 0, 0]
+		},
+		{
+			"description": "Script resources for oriented splat streaming",
+			"type": "script",
+			"language": "javascript",
+			"uuid": "280f1f87-c5a5-4756-b33c-0976e55d0ad3",
+			"version": [1, 0, 0],
+			"entry": "scripts/main.js"
+		}
+	],
+	"dependencies": [
+		{
+			"module_name": "@minecraft/server",
+			"version": "1.14.0"
+		},
+		{
+			"uuid": "78ec6229-ce0d-4d97-9bf3-8fe3584a86ea",
+			"version": [1, 0, 0]
+		}
+	]
+}
