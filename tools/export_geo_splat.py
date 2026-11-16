@@ -1,230 +1,318 @@
 #!/usr/bin/env python3
 """
-Bake 3D Gaussian Splats (.ply) directly into a static Minecraft Bedrock .geo.json splat cloud
-and an accompanying RGBA Gaussian texture atlas using `poly_mesh` (used by `03_Full_GS_Pack`).
+Bake 3D Gaussian Splats (.ply) directly into a static Minecraft Bedrock .geo.json model
+and an accompanying high-resolution RGBA Gaussian texture atlas (used by `03_SplatRenderer_Pack`).
 
-Features:
-1. Smooth Shrinkwrap Core Occluder (`core_mesh`): Uses the clean, non-self-intersecting
-   icosphere shrinkwrap hull shrunk by 6% inside the surface so back-side splats are 100%
-   hardware depth-occluded from every viewing angle with zero protruding dark discs.
-2. Tangent-Aligned Anisotropic Gaussian Splat Cloud (`splat_cloud`): Packs 1,200–2,400
-   KNN-color-smoothed, surface-tangent elliptical Gaussian splat quads into a single-bone
-   `poly_mesh`, avoiding Bedrock's 2,500-bone CPU transform overhead and eliminating spiky
-   intersecting cards.
+Generates an inset depth-writing core shell (`core_*`) for all surface voxels so
+back-side splats are hardware-occluded from every 360-degree angle, paired with
+true 3DGS quaternion-oriented, anisotropic feathered Gaussian surface splats (`s_*`)
+with zero square-edge clipping (matching `03_SplatRenderer_Pack-Original`).
 """
 import argparse
 import json
 import math
-import time
 from pathlib import Path
 import numpy as np
 from PIL import Image
-from scipy.spatial import cKDTree
+from plyfile import PlyData
 
-from render_imposter import GaussianScene, eval_sh_color_ortho, apply_color_grade
-from export_mesh import render_6view_ortho_atlas, build_shrinkwrap_mesh, project_6view_uvs
+
+def rotation_matrix_to_bedrock_euler(R_plane: np.ndarray) -> tuple[float, float, float]:
+    """
+    Convert a 3x3 column-major basis matrix [axis_u, axis_v, normal] in Minecraft space
+    into Bedrock bone Euler angles [rx, ry, rz] (in degrees).
+    """
+    sy = math.sqrt(R_plane[0, 0] ** 2 + R_plane[1, 0] ** 2)
+    singular = sy < 1e-6
+    if not singular:
+        rx = math.atan2(R_plane[2, 1], R_plane[2, 2])
+        ry = math.atan2(-R_plane[2, 0], sy)
+        rz = math.atan2(R_plane[1, 0], R_plane[0, 0])
+    else:
+        rx = math.atan2(-R_plane[1, 2], R_plane[1, 1])
+        ry = math.atan2(-R_plane[2, 0], sy)
+        rz = 0.0
+    return -math.degrees(rx), -math.degrees(ry), math.degrees(rz)
+
+
+def compute_local_inward_vectors(pts: np.ndarray, radius: float) -> np.ndarray:
+    """Compute unit inward direction toward local occupied neighborhood center-of-mass."""
+    n = len(pts)
+    inward = np.zeros_like(pts)
+    r2 = radius * radius
+    chunk = 512
+    for start in range(0, n, chunk):
+        end = min(start + chunk, n)
+        diff = pts[None, :, :] - pts[start:end, None, :]
+        d2 = np.sum(diff * diff, axis=-1)
+        mask = d2 < r2
+        counts = np.maximum(mask.sum(axis=1, keepdims=True), 1)
+        mean_vec = (mask[:, :, None] * diff).sum(axis=1) / counts
+        norms = np.linalg.norm(mean_vec, axis=1, keepdims=True)
+        valid_dir = norms[:, 0] > (0.04 * radius)
+        inward[start:end][valid_dir] = mean_vec[valid_dir] / norms[valid_dir]
+    return inward
+
+
+def build_splat_bone(
+    name: str,
+    px_k: float,
+    py_k: float,
+    pz_k: float,
+    w_size: float,
+    h_size: float,
+    rot_x: float,
+    rot_y: float,
+    rot_z: float,
+    u: int,
+    v_uv: int,
+    tile_px: int,
+) -> dict:
+    """Create a single-quad Bedrock bone (rendered double-sided via DisableCulling)."""
+    return {
+        "name": name,
+        "parent": "root",
+        "pivot": [round(px_k, 3), round(py_k, 3), round(pz_k, 3)],
+        "rotation": [round(rot_x, 2), round(rot_y, 2), round(rot_z, 2)],
+        "cubes": [
+            {
+                "origin": [round(px_k - w_size / 2, 3), round(py_k - h_size / 2, 3), round(pz_k, 3)],
+                "size": [round(w_size, 3), round(h_size, 3), 0],
+                "uv": {
+                    "north": {"uv": [u, v_uv], "uv_size": [tile_px, tile_px]},
+                },
+            }
+        ],
+    }
 
 
 def export_geo_splat(
-    ply_file: Path | GaussianScene,
+    ply_file: Path | object,
     output_geo: Path,
-    output_tex: Path | None = None,
-    geometry_id: str = "geometry.splat_cloud_0",
-    max_splats: int = 1600,
-    target_size: float = 24.0,
+    output_tex: Path,
+    geometry_id: str = "geometry.splat_cloud",
+    max_splats: int = 2500,
+    target_size: float = 48.0,
     tile_res: int = 512,
     hue_shift_deg: float = 0.0,
     flip_y: bool = True,
 ) -> None:
-    """
-    Export a Full Static Gaussian Splat Cloud (`core_mesh` + `splat_cloud` bones)
-    into a Bedrock `.geo.json` model and RGBA atlas.
-    """
-    t0 = time.time()
-    scene = ply_file if isinstance(ply_file, GaussianScene) else GaussianScene(ply_file, flip_y=flip_y)
+    ply_path = getattr(ply_file, "ply_file", ply_file)
+    plydata = PlyData.read(str(ply_path))
+    v = plydata["vertex"]
+    x = np.array(v["x"], dtype=np.float64)
+    y = np.array(v["y"], dtype=np.float64)
+    z = np.array(v["z"], dtype=np.float64)
 
-    atlas_w = tile_res * 3
-    spr_rows_px = 512
-    atlas_h = tile_res * 2 + spr_rows_px
+    # 1. Extract Colors in native 3DGS sRGB space (no extra 1/2.2 gamma washout)
+    C0 = 0.28209479177387814
+    if "f_dc_0" in v.data.dtype.names:
+        r = np.clip(0.5 + np.array(v["f_dc_0"], dtype=np.float64) * C0, 0.0, 1.0)
+        g = np.clip(0.5 + np.array(v["f_dc_1"], dtype=np.float64) * C0, 0.0, 1.0)
+        b = np.clip(0.5 + np.array(v["f_dc_2"], dtype=np.float64) * C0, 0.0, 1.0)
+    else:
+        r = np.array(v["red"], dtype=np.float64) / 255.0
+        g = np.array(v["green"], dtype=np.float64) / 255.0
+        b = np.array(v["blue"], dtype=np.float64) / 255.0
 
-    # 1. Build clean Shrinkwrap Core Hull (shrunk 5% inward so outer splats sit cleanly on top)
-    verts_scene, verts_mc, vert_normals, faces = build_shrinkwrap_mesh(
-        scene, mode="smooth", target_size=target_size
+    opacity = (
+        1.0 / (1.0 + np.exp(-np.array(v["opacity"], dtype=np.float64)))
+        if "opacity" in v.data.dtype.names
+        else np.ones_like(x)
     )
-    center_mc = np.mean(verts_mc, axis=0, keepdims=True)
-    core_verts_mc = center_mc + (verts_mc - center_mc) * 0.94
+    sx = np.exp(np.array(v["scale_0"], dtype=np.float64))
+    sy = np.exp(np.array(v["scale_1"], dtype=np.float64))
+    sz = np.exp(np.array(v["scale_2"], dtype=np.float64))
+    s_max = np.maximum(np.maximum(sx, sy), sz)
 
-    uvs_core_raw, polys_core = project_6view_uvs(verts_scene, faces, scene.span, fill_ratio=0.82)
-    # Rescale V coordinates because the atlas has an extra `spr_rows_px` strip at the bottom
-    top_h_ratio = (tile_res * 2) / atlas_h
-    uvs_core = []
-    for u, v_norm in uvs_core_raw:
-        v_img = (1.0 - v_norm) * top_h_ratio
-        uvs_core.append([round(u, 5), round(1.0 - v_img, 5)])
+    rw = np.array(v["rot_0"], dtype=np.float64)
+    rx = np.array(v["rot_1"], dtype=np.float64)
+    ry = np.array(v["rot_2"], dtype=np.float64)
+    rz = np.array(v["rot_3"], dtype=np.float64)
+    norms = np.sqrt(rw**2 + rx**2 + ry**2 + rz**2)
+    norms = np.where(norms == 0, 1.0, norms)
+    rw, rx, ry, rz = rw / norms, rx / norms, ry / norms, rz / norms
 
-    # 2. Sample `max_splats` surface-hugging Gaussian splats
-    scale_factor = target_size / scene.span
-    px = scene.x * scale_factor
-    py = scene.y * scale_factor
-    pz = scene.z * scale_factor
-    # Align Y shift with `verts_mc`
-    y_shift = float(np.min(verts_mc[:, 1]) - np.min(verts_scene[:, 1] * scale_factor))
-    py = py + y_shift
+    # 2. Filter out oversized interior/background filler Gaussians (> 85th percentile scale)
+    scale_cap = np.percentile(s_max, 85)
+    valid = np.where((opacity > 0.08) & (s_max <= scale_cap))[0]
+    if len(valid) == 0:
+        valid = np.arange(len(x))
 
-    mesh_tree = cKDTree(verts_mc)
-    splat_pts = np.column_stack([px, py, pz])
-    dist_to_surf, nearest_v = mesh_tree.query(splat_pts, k=1, workers=-1)
+    chroma_valid = np.maximum(np.maximum(r[valid], g[valid]), b[valid]) - np.minimum(
+        np.minimum(r[valid], g[valid]), b[valid]
+    )
+    importance = opacity[valid] * (1.0 + 1.5 * chroma_valid)
+    valid = valid[np.argsort(importance)[::-1]]
 
-    near_mask = np.where((dist_to_surf < 1.35) & (scene.op > 0.10))[0]
-    if len(near_mask) == 0:
-        near_mask = np.arange(len(px))
+    min_x, max_x = np.percentile(x[valid], 2), np.percentile(x[valid], 98)
+    min_y, max_y = np.percentile(y[valid], 2), np.percentile(y[valid], 98)
+    min_z, max_z = np.percentile(z[valid], 2), np.percentile(z[valid], 98)
+    scale_factor = target_size / max(max_x - min_x or 1.0, max_y - min_y or 1.0, max_z - min_z or 1.0)
+    cx, cy, cz = (min_x + max_x) / 2.0, (min_y + max_y) / 2.0, (min_z + max_z) / 2.0
 
-    # Evaluate view-dependent SH colors
-    r_f, g_f, b_f = eval_sh_color_ortho(0.2, -0.25, 0.94, scene.f_dc, scene.f_rest, scene.has_rest)
-    r_b, g_b, b_b = eval_sh_color_ortho(-0.2, -0.25, -0.94, scene.f_dc, scene.f_rest, scene.has_rest)
-    fw = np.clip(0.5 + 0.5 * (scene.z / (np.linalg.norm(np.column_stack([scene.x, scene.y, scene.z]), axis=1) + 1e-6)), 0.0, 1.0)
-    r_all = r_f * fw + r_b * (1.0 - fw)
-    g_all = g_f * fw + g_b * (1.0 - fw)
-    b_all = b_f * fw + b_b * (1.0 - fw)
-    r_all, g_all, b_all = apply_color_grade(r_all, g_all, b_all, hue_shift_deg=hue_shift_deg, saturation_boost=1.20)
+    y_sign = -1.0 if flip_y else 1.0
+    px = (x[valid] - cx) * scale_factor
+    py = y_sign * (y[valid] - cy) * scale_factor
+    pz = -(z[valid] - cz) * scale_factor
 
-    # Spatially stratify splats into voxels so the entire gem is evenly covered in soft Gaussian splats
-    lo_res, hi_res = 8.0, 96.0
-    pts_n = splat_pts[near_mask]
-    for _ in range(16):
-        mid = 0.5 * (lo_res + hi_res)
-        vsize = target_size / mid
-        vx = np.floor((pts_n[:, 0] + target_size * 2.0) / vsize).astype(np.int64)
-        vy = np.floor((pts_n[:, 1] + target_size * 2.0) / vsize).astype(np.int64)
-        vz = np.floor((pts_n[:, 2] + target_size * 2.0) / vsize).astype(np.int64)
+    # 3. Voxelize to half of max_splats so every voxel gets an inset depth-writing core
+    #    bone + a smooth outer Gaussian surface bone (preserving 360-deg Z occlusion).
+    voxel_budget = max(64, max_splats // 2)
+    lo_res, hi_res = 6.0, 96.0
+    for _ in range(18):
+        mid_res = (lo_res + hi_res) * 0.5
+        vsize = target_size / mid_res
+        vx = np.floor((px + target_size * 4.0) / vsize).astype(np.int64)
+        vy = np.floor((py + target_size * 4.0) / vsize).astype(np.int64)
+        vz = np.floor((pz + target_size * 4.0) / vsize).astype(np.int64)
         keys = (vx << 40) | (vy << 20) | vz
-        if len(np.unique(keys)) < max_splats:
-            lo_res = mid
+        if len(np.unique(keys)) < voxel_budget:
+            lo_res = mid_res
         else:
-            hi_res = mid
+            hi_res = mid_res
 
-    vsize = target_size / (0.5 * (lo_res + hi_res))
-    vx = np.floor((pts_n[:, 0] + target_size * 2.0) / vsize).astype(np.int64)
-    vy = np.floor((pts_n[:, 1] + target_size * 2.0) / vsize).astype(np.int64)
-    vz = np.floor((pts_n[:, 2] + target_size * 2.0) / vsize).astype(np.int64)
+    vsize = target_size / ((lo_res + hi_res) * 0.5)
+    vx = np.floor((px + target_size * 4.0) / vsize).astype(np.int64)
+    vy = np.floor((py + target_size * 4.0) / vsize).astype(np.int64)
+    vz = np.floor((pz + target_size * 4.0) / vsize).astype(np.int64)
     keys = (vx << 40) | (vy << 20) | vz
-    uniq_keys, _, inv = np.unique(keys, return_index=True, return_inverse=True)
+    uniq_keys, first_idx, inv = np.unique(keys, return_index=True, return_inverse=True)
 
-    op_n = scene.op[near_mask]
-    w_sum = np.bincount(inv, weights=op_n) + 1e-6
-    sx_mean = np.bincount(inv, weights=pts_n[:, 0] * op_n) / w_sum
-    sy_mean = np.bincount(inv, weights=pts_n[:, 1] * op_n) / w_sum
-    sz_mean = np.bincount(inv, weights=pts_n[:, 2] * op_n) / w_sum
-    sr_mean = np.bincount(inv, weights=r_all[near_mask] * op_n) / w_sum
-    sg_mean = np.bincount(inv, weights=g_all[near_mask] * op_n) / w_sum
-    sb_mean = np.bincount(inv, weights=b_all[near_mask] * op_n) / w_sum
+    rv, gv, bv, opv = r[valid], g[valid], b[valid], opacity[valid]
+    w = opv * (1.0 + 1.5 * chroma_valid)
+    w_sum = np.bincount(inv, weights=w)
+    op_sum = np.bincount(inv, weights=opv)
+
+    vx_mean = np.bincount(inv, weights=px * w) / w_sum
+    vy_mean = np.bincount(inv, weights=py * w) / w_sum
+    vz_mean = np.bincount(inv, weights=pz * w) / w_sum
+    vr = np.bincount(inv, weights=rv * w) / w_sum
+    vg = np.bincount(inv, weights=gv * w) / w_sum
+    vb = np.bincount(inv, weights=bv * w) / w_sum
+
+    # Vibrance boost (1.30x) and gentle brightness lift (1.12x)
+    lum = 0.299 * vr + 0.587 * vg + 0.114 * vb
+    vr = np.clip((lum + (vr - lum) * 1.30) * 1.12, 0.0, 1.0)
+    vg = np.clip((lum + (vg - lum) * 1.30) * 1.12, 0.0, 1.0)
+    vb = np.clip((lum + (vb - lum) * 1.30) * 1.12, 0.0, 1.0)
+    v_op = np.clip(0.82 + 0.16 * (1.0 - np.exp(-op_sum)), 0.82, 0.98)
 
     keep = np.arange(len(uniq_keys))
-    if len(keep) > max_splats:
-        keep = keep[np.argsort(w_sum)[::-1][:max_splats]]
+    if len(keep) > voxel_budget:
+        keep = keep[np.argsort(op_sum[keep])[::-1][:voxel_budget]]
 
-    s_xyz = np.column_stack([sx_mean[keep], sy_mean[keep], sz_mean[keep]])
-    sr, sg, sb = sr_mean[keep], sg_mean[keep], sb_mean[keep]
+    # Shift Y so model base sits cleanly on ground (min Y = 1.0 model pixel)
+    vy_mean = vy_mean - np.min(vy_mean[keep]) + 1.0
 
-    # Sort splats inside-out from centroid
-    d_c = np.sum((s_xyz - center_mc) ** 2, axis=1)
-    ord_s = np.argsort(d_c)
-    s_xyz = s_xyz[ord_s]
-    sr, sg, sb = sr[ord_s], sg[ord_s], sb[ord_s]
+    # Compute local inward vector for each voxel to separate Z-writing core from outer surface
+    pts = np.column_stack([vx_mean[keep], vy_mean[keep], vz_mean[keep]])
+    inward = compute_local_inward_vectors(pts, radius=2.4 * vsize)
+    core_pts = pts + inward * (0.65 * vsize)
+    surf_pts = pts - inward * (0.20 * vsize)
 
-    _, v_idx = mesh_tree.query(s_xyz, k=1, workers=-1)
-    s_normals = vert_normals[v_idx]
+    # Sort surface splats inside-out from centroid
+    c_x, c_y, c_z = np.mean(surf_pts[:, 0]), np.mean(surf_pts[:, 1]), np.mean(surf_pts[:, 2])
+    dist_sq = (surf_pts[:, 0] - c_x) ** 2 + (surf_pts[:, 1] - c_y) ** 2 + (surf_pts[:, 2] - c_z) ** 2
+    surf_order = np.argsort(dist_sq)
 
-    # Paint 16x16 soft Gaussian tiles into bottom strip of the atlas
-    splat_tile_px = 16
-    tiles_per_row = atlas_w // splat_tile_px
-    max_tiles = (spr_rows_px // splat_tile_px) * tiles_per_row
-    n_splats = min(len(s_xyz), max_tiles)
+    # Build 32x32 per-splat RGBA atlas:
+    # - Core tiles use a crisp circular disc (for entity_alphatest Z-buffer occlusion)
+    # - Surface tiles use a smooth circular Gaussian fading strictly to alpha=0 at border
+    n_voxels = len(keep)
+    total_tiles = n_voxels * 2
+    grid_dim = math.ceil(math.sqrt(total_tiles))
+    tile_px = 32
+    atlas_px = grid_dim * tile_px
+    atlas_arr = np.zeros((atlas_px, atlas_px, 4), dtype=np.uint8)
 
-    if output_tex is not None:
-        base_6view = render_6view_ortho_atlas(scene, tile_res=tile_res, fill_ratio=0.82, hue_shift_deg=hue_shift_deg)
-        full_rgba = np.zeros((atlas_h, atlas_w, 4), dtype=np.uint8)
-        full_rgba[: tile_res * 2, :, :] = np.array(base_6view, dtype=np.uint8)
+    yy, xx = np.ogrid[:tile_px, :tile_px]
+    center = (tile_px - 1) / 2.0
+    dist = np.sqrt((xx - center) ** 2 + (yy - center) ** 2)
+    sigma = tile_px * 0.28
+    t_win = np.clip((tile_px * 0.48 - dist) / (tile_px * 0.18), 0.0, 1.0)
+    smooth_win = t_win * t_win * (3.0 - 2.0 * t_win)
+    gauss_mask = np.exp(-0.5 * (dist / sigma) ** 2) * smooth_win
+    core_mask = (dist <= tile_px * 0.42).astype(np.float64)
 
-        yy, xx = np.ogrid[:splat_tile_px, :splat_tile_px]
-        center_t = (splat_tile_px - 1) / 2.0
-        dist_t = np.sqrt((xx - center_t) ** 2 + (yy - center_t) ** 2)
-        sigma_t = splat_tile_px * 0.26
-        t_win = np.clip((splat_tile_px * 0.47 - dist_t) / (splat_tile_px * 0.18), 0.0, 1.0)
-        gauss_mask = np.exp(-0.5 * (dist_t / sigma_t) ** 2) * (t_win * t_win * (3.0 - 2.0 * t_win))
+    bones = [{"name": "root", "pivot": [0, 0, 0]}]
+    core_size = vsize * 2.25
+    base_surf_s = vsize * 4.0
 
-        for i in range(n_splats):
-            col = i % tiles_per_row
-            row = i // tiles_per_row
-            u0_px = col * splat_tile_px
-            v0_px = tile_res * 2 + row * splat_tile_px
-            full_rgba[v0_px : v0_px + splat_tile_px, u0_px : u0_px + splat_tile_px, 0] = int(np.clip(sr[i] * 255, 0, 255))
-            full_rgba[v0_px : v0_px + splat_tile_px, u0_px : u0_px + splat_tile_px, 1] = int(np.clip(sg[i] * 255, 0, 255))
-            full_rgba[v0_px : v0_px + splat_tile_px, u0_px : u0_px + splat_tile_px, 2] = int(np.clip(sb[i] * 255, 0, 255))
-            full_rgba[v0_px : v0_px + splat_tile_px, u0_px : u0_px + splat_tile_px, 3] = (
-                gauss_mask * 0.78 * 255.0
+    def emit_layer(
+        order_idx: np.ndarray,
+        layer_pts: np.ndarray,
+        prefix: str,
+        mask: np.ndarray,
+        is_core: bool,
+        start_idx: int,
+    ) -> None:
+        for offset, local_i in enumerate(order_idx):
+            k = keep[local_i]
+            idx_pos = start_idx + offset
+            orig_i = valid[first_idx[k]]
+            col = idx_pos % grid_dim
+            row = idx_pos // grid_dim
+            u, v_uv = col * tile_px, row * tile_px
+
+            alpha_scale = 1.0 if is_core else v_op[k]
+            atlas_arr[v_uv : v_uv + tile_px, u : u + tile_px, 0] = int(vr[k] * 255)
+            atlas_arr[v_uv : v_uv + tile_px, u : u + tile_px, 1] = int(vg[k] * 255)
+            atlas_arr[v_uv : v_uv + tile_px, u : u + tile_px, 2] = int(vb[k] * 255)
+            atlas_arr[v_uv : v_uv + tile_px, u : u + tile_px, 3] = np.clip(
+                mask * alpha_scale * 255, 0, 255
             ).astype(np.uint8)
 
-        output_tex.parent.mkdir(parents=True, exist_ok=True)
-        Image.fromarray(full_rgba, "RGBA").save(output_tex, optimize=True)
+            w_q, i_x, i_y, i_z = rw[orig_i], rx[orig_i], ry[orig_i], rz[orig_i]
+            R = np.array([
+                [1 - 2 * (i_y**2 + i_z**2), 2 * (i_x * i_y - w_q * i_z), 2 * (i_x * i_z + w_q * i_y)],
+                [2 * (i_x * i_y + w_q * i_z), 1 - 2 * (i_x**2 + i_z**2), 2 * (i_y * i_z - w_q * i_x)],
+                [2 * (i_x * i_z - w_q * i_y), 2 * (i_y * i_z + w_q * i_x), 1 - 2 * (i_x**2 + i_y**2)],
+            ])
+            R[1, :] = y_sign * R[1, :]
+            R[2, :] = -R[2, :]
 
-    # Build `splat_cloud` poly_mesh quads tangent to the surface
-    quad_half = vsize * 0.95
-    halo_positions = []
-    halo_normals = []
-    halo_uvs = []
-    halo_polys = []
+            scales = np.array([sx[orig_i], sy[orig_i], sz[orig_i]]) * scale_factor
+            min_idx = int(np.argmin(scales))
+            axes = [0, 1, 2]
+            axes.remove(min_idx)
 
-    for i in range(n_splats):
-        col = i % tiles_per_row
-        row = i // tiles_per_row
-        u0_px = col * splat_tile_px
-        v0_px = tile_res * 2 + row * splat_tile_px
+            axis_u = R[:, axes[0]]
+            axis_v = R[:, axes[1]]
+            normal = np.cross(axis_u, axis_v)
+            norm_len = np.linalg.norm(normal)
+            if norm_len > 1e-6:
+                normal = normal / norm_len
 
-        n_vec = s_normals[i]
-        n_vec = n_vec / max(float(np.linalg.norm(n_vec)), 1e-6)
-        # Position splat slightly outside the core hull along surface normal
-        c_pos = verts_mc[v_idx[i]] + n_vec * 0.12
+            R_plane = np.column_stack((axis_u, axis_v, normal))
+            rot_x, rot_y, rot_z = rotation_matrix_to_bedrock_euler(R_plane)
 
-        up_ref = np.array([0.0, 1.0, 0.0], dtype=np.float32)
-        if abs(n_vec[1]) > 0.95:
-            up_ref = np.array([1.0, 0.0, 0.0], dtype=np.float32)
-        t_u = np.cross(up_ref, n_vec)
-        t_u /= max(float(np.linalg.norm(t_u)), 1e-6)
-        t_v = np.cross(n_vec, t_u)
+            if is_core:
+                w_size = h_size = core_size
+            else:
+                aspect = float(np.clip(scales[axes[0]] / max(scales[axes[1]], 1e-8), 0.55, 1.8))
+                w_size = base_surf_s * math.sqrt(aspect)
+                h_size = base_surf_s / math.sqrt(aspect)
 
-        q0 = c_pos - t_u * quad_half - t_v * quad_half
-        q1 = c_pos + t_u * quad_half - t_v * quad_half
-        q2 = c_pos + t_u * quad_half + t_v * quad_half
-        q3 = c_pos - t_u * quad_half + t_v * quad_half
+            bones.append(
+                build_splat_bone(
+                    f"{prefix}{offset}",
+                    float(layer_pts[local_i, 0]),
+                    float(layer_pts[local_i, 1]),
+                    float(layer_pts[local_i, 2]),
+                    w_size,
+                    h_size,
+                    rot_x,
+                    rot_y,
+                    rot_z,
+                    u,
+                    v_uv,
+                    tile_px,
+                )
+            )
 
-        v_base = len(halo_positions)
-        for q_pt in (q0, q1, q2, q3):
-            halo_positions.append([round(float(q_pt[0]), 4), round(float(q_pt[1]), 4), round(float(q_pt[2]), 4)])
-        n_idx = len(halo_normals)
-        halo_normals.append([round(float(n_vec[0]), 4), round(float(n_vec[1]), 4), round(float(n_vec[2]), 4)])
-
-        u_min = (u0_px + 0.5) / atlas_w
-        u_max = (u0_px + splat_tile_px - 0.5) / atlas_w
-        v_min = 1.0 - (v0_px + splat_tile_px - 0.5) / atlas_h
-        v_max = 1.0 - (v0_px + 0.5) / atlas_h
-
-        uv_base = len(halo_uvs)
-        halo_uvs.extend([
-            [round(u_min, 5), round(v_min, 5)],
-            [round(u_max, 5), round(v_min, 5)],
-            [round(u_max, 5), round(v_max, 5)],
-            [round(u_min, 5), round(v_max, 5)],
-        ])
-        halo_polys.append([
-            [v_base, n_idx, uv_base],
-            [v_base + 1, n_idx, uv_base + 1],
-            [v_base + 2, n_idx, uv_base + 2],
-            [v_base + 3, n_idx, uv_base + 3],
-        ])
-
-    core_positions = [[round(float(v[0]), 4), round(float(v[1]), 4), round(float(v[2]), 4)] for v in core_verts_mc]
-    core_normals = [[round(float(n[0]), 4), round(float(n[1]), 4), round(float(n[2]), 4)] for n in vert_normals]
+    emit_layer(np.arange(n_voxels), core_pts, "core_", core_mask, is_core=True, start_idx=0)
+    emit_layer(surf_order, surf_pts, "s_", gauss_mask, is_core=False, start_idx=n_voxels)
 
     geo_json = {
         "format_version": "1.12.0",
@@ -232,77 +320,52 @@ def export_geo_splat(
             {
                 "description": {
                     "identifier": geometry_id,
-                    "texture_width": atlas_w,
-                    "texture_height": atlas_h,
-                    "visible_bounds_width": 4,
-                    "visible_bounds_height": 4,
-                    "visible_bounds_offset": [0, 1.5, 0],
+                    "texture_width": atlas_px,
+                    "texture_height": atlas_px,
+                    "visible_bounds_width": 8,
+                    "visible_bounds_height": 8,
+                    "visible_bounds_offset": [0, 2, 0],
                 },
-                "bones": [
-                    {"name": "root", "pivot": [0, 0, 0]},
-                    {
-                        "name": "core_mesh",
-                        "parent": "root",
-                        "pivot": [0, 8, 0],
-                        "poly_mesh": {
-                            "normalized_uvs": True,
-                            "positions": core_positions,
-                            "normals": core_normals,
-                            "uvs": uvs_core,
-                            "polys": polys_core,
-                        },
-                    },
-                    {
-                        "name": "splat_cloud",
-                        "parent": "core_mesh",
-                        "pivot": [0, 8, 0],
-                        "poly_mesh": {
-                            "normalized_uvs": True,
-                            "positions": halo_positions,
-                            "normals": halo_normals,
-                            "uvs": halo_uvs,
-                            "polys": halo_polys,
-                        },
-                    },
-                ],
+                "bones": bones,
             }
         ],
     }
 
     output_geo.parent.mkdir(parents=True, exist_ok=True)
     output_geo.write_text(json.dumps(geo_json), encoding="utf-8")
+    if output_tex is not None:
+        output_tex.parent.mkdir(parents=True, exist_ok=True)
+        Image.fromarray(atlas_arr, "RGBA").save(output_tex, optimize=True)
     print(
-        f"✓ Exported Full GS Splat Cloud ({len(faces)} core tris + {n_splats} tangent splats) "
-        f"to {output_geo.name} in {time.time() - t0:.2f}s"
+        f"✓ Exported {n_voxels} inset core + {n_voxels} smooth Gaussian surface planes "
+        f"({atlas_px}x{atlas_px} atlas) to {output_geo.name}"
     )
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Bake PLY splats into a static Bedrock .geo.json model.")
     parser.add_argument("ply_file", type=Path, help="Input .ply file")
-    parser.add_argument("-n", "--max-splats", type=int, default=1600, help="Total surface splat planes (default: 1600)")
-    parser.add_argument("-s", "--size", type=float, default=24.0, help="Target size in model pixels (16 = 1 block)")
-    parser.add_argument("--hue-shift", type=float, default=0.0, help="Optional hue shift in degrees")
+    parser.add_argument("-n", "--max-splats", type=int, default=2500, help="Total splat planes (default: 2500)")
+    parser.add_argument("-s", "--size", type=float, default=48.0, help="Target size in model pixels (16 = 1 block)")
     parser.add_argument("--no-flip-y", action="store_true", help="Do not flip Y/Z axes")
     parser.add_argument(
         "--geo-out",
         type=Path,
-        default=Path("./bedrock/03_Full_GS_Pack/SplatRenderer_RP/models/entity/splat_cloud_0.geo.json"),
+        default=Path("./bedrock/03_SplatRenderer_Pack/SplatRenderer_RP/models/entity/splat_cloud_5.geo.json"),
     )
     parser.add_argument(
         "--tex-out",
         type=Path,
-        default=Path("./bedrock/03_Full_GS_Pack/SplatRenderer_RP/textures/entity/splat_cloud_0.png"),
+        default=Path("./bedrock/03_SplatRenderer_Pack/SplatRenderer_RP/textures/entity/splat_cloud_5.png"),
     )
-    parser.add_argument("--geo-id", type=str, default="geometry.splat_cloud_0", help="Geometry identifier")
+    parser.add_argument("--geo-id", type=str, default="geometry.splat_cloud_5", help="Geometry identifier")
     args = parser.parse_args()
     export_geo_splat(
         args.ply_file,
-        output_geo=args.geo_out,
-        output_tex=args.tex_out,
+        args.geo_out,
+        args.tex_out,
         geometry_id=args.geo_id,
         max_splats=args.max_splats,
         target_size=args.size,
-        hue_shift_deg=args.hue_shift,
         flip_y=not args.no_flip_y,
     )

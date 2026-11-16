@@ -211,6 +211,7 @@ class GaussianScene:
 
     def __init__(self, ply_file: Path, max_splats: int = 350000, flip_y: bool = True):
         t0 = time.time()
+        self.ply_file = Path(ply_file)
         plydata = PlyData.read(str(ply_file))
         v = plydata["vertex"]
 

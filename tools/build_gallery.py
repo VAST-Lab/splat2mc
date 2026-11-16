@@ -531,10 +531,10 @@ def build_pack_01_imposter(repo_root: Path, scenes: dict[str, GaussianScene]) ->
       * 4: Amethyst [Medium: 16x5 (80 angles)]
       * 5: Amethyst [High: 24x7 (168 angles)]
     """
-    print("\n=== Building Pack 01: 01_Imposter_Pack (Angle-Pinned Spherical Imposter — 3 Quality Tiers) ===")
-    pack_dir = repo_root / "bedrock" / "01_Imposter_Pack"
-    bp_dir = pack_dir / "Imposter_BP"
-    rp_dir = pack_dir / "Imposter_RP"
+    print("\n=== Building Pack 01: 01_SplatImposter_Pack (Angle-Pinned Spherical Imposter — 3 Quality Tiers) ===")
+    pack_dir = repo_root / "bedrock" / "01_SplatImposter_Pack"
+    bp_dir = pack_dir / "SplatImposter_BP"
+    rp_dir = pack_dir / "SplatImposter_RP"
 
     variants = [
         {"idx": 0, "slug": "low_citrine",   "label": "Citrine Cluster [Low: 12x3 = 36 Angles]",      "ply": "Example1.ply", "cols": 12, "rows": 3, "res": 160},
@@ -823,73 +823,24 @@ def build_pack_01_imposter(repo_root: Path, scenes: dict[str, GaussianScene]) ->
         },
     )
 
-    # Attachables for held/dropped items
-    for v in variants:
-        i = v["idx"]
-        cols = float(v["cols"])
-        rows = float(v["rows"])
-        write_json(
-            rp_dir / "attachables" / f"gem_item_{i}.attachable.json",
-            {
-                "format_version": "1.10.0",
-                "minecraft:attachable": {
-                    "description": {
-                        "identifier": f"custom:gem_item_{i}",
-                        "materials": {"default": "imposter_alphatest", "enchanted": "imposter_alphatest"},
-                        "textures": {
-                            "default": f"textures/entity/spritesheet_{i}",
-                            "enchanted": "textures/misc/enchanted_item_glint",
-                        },
-                        "geometry": {"default": "geometry.imposter_hand"},
-                        "animations": {"hand_pose": "animation.imposter.hand_pose"},
-                        "scripts": {
-                            "pre_animation": [
-                                f"v.cols = {cols};",
-                                f"v.rows = {rows};",
-                                "v.pitch_min = -45.0;",
-                                "v.pitch_max = 45.0;",
-                                "v.yaw_step = 360.0 / v.cols;",
-                                "v.rel_cam_yaw = query.rotation_to_camera(1) - query.body_y_rotation;",
-                                "v.raw_yaw = -v.rel_cam_yaw;",
-                                "v.norm_yaw = math.mod(math.mod(v.raw_yaw + (v.yaw_step * 0.5), 360.0) + 360.0, 360.0);",
-                                "v.col = math.clamp(math.floor(v.norm_yaw / v.yaw_step), 0, v.cols - 1);",
-                                "v.raw_pitch = math.clamp(-query.rotation_to_camera(0), v.pitch_min, v.pitch_max);",
-                                "v.pitch_step = (v.pitch_max - v.pitch_min) / math.max(1, v.rows - 1);",
-                                "v.row = math.clamp(math.round((v.pitch_max - v.raw_pitch) / v.pitch_step), 0, v.rows - 1);",
-                            ],
-                            "animate": ["hand_pose"],
-                        },
-                        "render_controllers": ["controller.render.imposter_attachable"],
-                    }
-                },
-            },
-        )
-
     lang_lines = ["entity.custom:imposter.name=Gaussian Splat Imposter Gem"]
     for v in variants:
         lang_lines.append(f"item.custom:gem_item_{v['idx']}.name=✦ {v['label']}")
     lang_lines.append("item.custom:imposter_menu.name=✦ Imposter Gem Catalog")
     (rp_dir / "texts").mkdir(parents=True, exist_ok=True)
     (rp_dir / "texts" / "en_US.lang").write_text("\n".join(lang_lines) + "\n", encoding="utf-8")
-    write_install_cmd(pack_dir, "Imposter_BP", "Imposter_RP", "01 Spherical Imposter Pack")
+    write_install_cmd(pack_dir, "SplatImposter_BP", "SplatImposter_RP", "01 Spherical Imposter Pack")
 
 
 def build_pack_02_polymesh(repo_root: Path, scenes: dict[str, GaussianScene]) -> None:
     """
-    Build Pack 02 (`bedrock/02_Poly_Mesh_Pack`):
-    - Pure Shrinkwrap Surface Map + 6-View Orthographic High-to-Low Bake (`poly_mesh`)
-    - 3 Mesh Styles x 2 Gems = 6 Variants:
-      * 0: Citrine Cluster [Smooth Shrinkwrap: 1,280 faces]
-      * 1: Citrine Cluster [Detailed Shrinkwrap: 5,120 faces]
-      * 2: Citrine Cluster [Faceted Crystal Hull: 320 faces]
-      * 3: Amethyst Geode  [Smooth Shrinkwrap: 1,280 faces]
-      * 4: Amethyst Geode  [Detailed Shrinkwrap: 5,120 faces]
-      * 5: Amethyst Geode  [Faceted Crystal Hull: 320 faces]
+    Build Pack 02 (`bedrock/02_SplatMesh_Pack`):
+    - Pure Quad-Sphere Shrinkwrap Surface Map + 6-View Orthographic High-to-Low Bake (`poly_mesh`)
     """
-    print("\n=== Building Pack 02: 02_Poly_Mesh_Pack (Shrinkwrap Surface Map + 6-View High-to-Low Bake) ===")
-    pack_dir = repo_root / "bedrock" / "02_Poly_Mesh_Pack"
-    bp_dir = pack_dir / "PolyMesh_BP"
-    rp_dir = pack_dir / "PolyMesh_RP"
+    print("\n=== Building Pack 02: 02_SplatMesh_Pack (Quad-Sphere Shrinkwrap Surface Map + 6-View Bake) ===")
+    pack_dir = repo_root / "bedrock" / "02_SplatMesh_Pack"
+    bp_dir = pack_dir / "SplatMesh_BP"
+    rp_dir = pack_dir / "SplatMesh_RP"
 
     variants = [
         {"idx": 0, "slug": "smooth_citrine",    "label": "Citrine Cluster [Smooth Shrinkwrap: 1280 tris]",   "ply": "Example1.ply", "mode": "smooth",   "tex_idx": 0},
@@ -1149,30 +1100,6 @@ def build_pack_02_polymesh(repo_root: Path, scenes: dict[str, GaussianScene]) ->
         },
     )
 
-    for v in variants:
-        i = v["idx"]
-        t_i = v["tex_idx"]
-        write_json(
-            rp_dir / "attachables" / f"poly_gem_item_{i}.attachable.json",
-            {
-                "format_version": "1.10.0",
-                "minecraft:attachable": {
-                    "description": {
-                        "identifier": f"custom:poly_gem_item_{i}",
-                        "materials": {"default": "poly_gem_opaque", "enchanted": "poly_gem_opaque"},
-                        "textures": {
-                            "default": f"textures/entity/poly_gem_tex_{t_i}",
-                            "enchanted": "textures/misc/enchanted_item_glint",
-                        },
-                        "geometry": {"default": f"geometry.poly_gem_{i}"},
-                        "animations": {"held_pose": "animation.poly_gem.held_and_dropped"},
-                        "scripts": {"animate": ["held_pose"]},
-                        "render_controllers": ["controller.render.poly_gem_attachable"],
-                    }
-                },
-            },
-        )
-
     item_tex_data = {f"poly_gem_{v['idx']}": {"textures": f"textures/items/poly_gem_{v['idx']}"} for v in variants}
     write_json(
         rp_dir / "textures" / "item_texture.json",
@@ -1189,23 +1116,16 @@ def build_pack_02_polymesh(repo_root: Path, scenes: dict[str, GaussianScene]) ->
     lang_lines.append("item.custom:polymesh_menu.name=✦ PolyMesh Gem Catalog")
     (rp_dir / "texts").mkdir(parents=True, exist_ok=True)
     (rp_dir / "texts" / "en_US.lang").write_text("\n".join(lang_lines) + "\n", encoding="utf-8")
-    write_install_cmd(pack_dir, "PolyMesh_BP", "PolyMesh_RP", "02 Shrinkwrap PolyMesh Pack")
+    write_install_cmd(pack_dir, "SplatMesh_BP", "SplatMesh_RP", "02 Shrinkwrap PolyMesh Pack")
 
 
 def build_pack_03_full_gs(repo_root: Path, scenes: dict[str, GaussianScene]) -> None:
     """
-    Build Pack 03 (`bedrock/03_Full_GS_Pack`):
+    Build Pack 03 (`bedrock/03_SplatRenderer_Pack`):
     - Full Oriented Gaussian Splat Cloud (`export_geo_splat.py`) + Particle Streamer (`/scriptevent sample:run`)
-    - 3 Splat Density Tiers x 2 Gems = 6 Variants:
-      * 0: Citrine Cluster [800 Surface Splats]
-      * 1: Citrine Cluster [1,500 Surface Splats]
-      * 2: Citrine Cluster [2,400 Surface Splats]
-      * 3: Amethyst Geode  [800 Surface Splats]
-      * 4: Amethyst Geode  [1,500 Surface Splats]
-      * 5: Amethyst Geode  [2,400 Surface Splats]
     """
-    print("\n=== Building Pack 03: 03_Full_GS_Pack (Full Oriented Splat Cloud & Particle Stream) ===")
-    pack_dir = repo_root / "bedrock" / "03_Full_GS_Pack"
+    print("\n=== Building Pack 03: 03_SplatRenderer_Pack (Full Oriented Splat Cloud & Particle Stream) ===")
+    pack_dir = repo_root / "bedrock" / "03_SplatRenderer_Pack"
     bp_dir = pack_dir / "SplatRenderer_BP"
     rp_dir = pack_dir / "SplatRenderer_RP"
 
@@ -1234,10 +1154,10 @@ def build_pack_03_full_gs(repo_root: Path, scenes: dict[str, GaussianScene]) -> 
     variants = [
         {"idx": 0, "slug": "citrine_800",   "label": "Citrine Splat Cloud [800 Splats]",   "ply": "Example1.ply", "splats": 800,  "tex_idx": 0},
         {"idx": 1, "slug": "citrine_1500",  "label": "Citrine Splat Cloud [1500 Splats]",  "ply": "Example1.ply", "splats": 1500, "tex_idx": 0},
-        {"idx": 2, "slug": "citrine_2400",  "label": "Citrine Splat Cloud [2400 Splats]",  "ply": "Example1.ply", "splats": 2400, "tex_idx": 0},
+        {"idx": 2, "slug": "citrine_2400",  "label": "Citrine Splat Cloud [2400 Splats]",  "ply": "Example1.ply", "splats": 2500, "tex_idx": 0},
         {"idx": 3, "slug": "amethyst_800",  "label": "Amethyst Splat Cloud [800 Splats]",  "ply": "Example2.ply", "splats": 800,  "tex_idx": 1},
         {"idx": 4, "slug": "amethyst_1500", "label": "Amethyst Splat Cloud [1500 Splats]", "ply": "Example2.ply", "splats": 1500, "tex_idx": 1},
-        {"idx": 5, "slug": "amethyst_2400", "label": "Amethyst Splat Cloud [2400 Splats]", "ply": "Example2.ply", "splats": 2400, "tex_idx": 1},
+        {"idx": 5, "slug": "amethyst_2400", "label": "Amethyst Splat Cloud [2400 Splats]", "ply": "Example2.ply", "splats": 2500, "tex_idx": 1},
     ]
 
     for v in variants:
@@ -1251,8 +1171,7 @@ def build_pack_03_full_gs(repo_root: Path, scenes: dict[str, GaussianScene]) -> 
             output_tex=tex_out,
             geometry_id=f"geometry.splat_cloud_{i}",
             max_splats=v["splats"],
-            target_size=24.0,
-            tile_res=512,
+            target_size=48.0,
         )
         icon_img = scene.render_view(yaw_deg=-15.0, pitch_deg=18.0, tile_res=128, fill_ratio=0.84)
         icon_out = rp_dir / "textures" / "items" / f"splat_gem_{i}.png"
@@ -1468,33 +1387,6 @@ def build_pack_03_full_gs(repo_root: Path, scenes: dict[str, GaussianScene]) -> 
             },
         },
     )
-
-    for v in variants:
-        i = v["idx"]
-        write_json(
-            rp_dir / "attachables" / f"splat_gem_item_{i}.attachable.json",
-            {
-                "format_version": "1.10.0",
-                "minecraft:attachable": {
-                    "description": {
-                        "identifier": f"custom:splat_gem_item_{i}",
-                        "materials": {
-                            "default": "splat_cloud_blend",
-                            "core": "splat_cloud_core",
-                            "enchanted": "splat_cloud_core",
-                        },
-                        "textures": {
-                            "default": f"textures/entity/splat_cloud_{i}",
-                            "enchanted": "textures/misc/enchanted_item_glint",
-                        },
-                        "geometry": {"default": f"geometry.splat_cloud_{i}"},
-                        "animations": {"held_pose": "animation.splat_cloud.held_and_dropped"},
-                        "scripts": {"animate": ["held_pose"]},
-                        "render_controllers": ["controller.render.splat_cloud_attachable"],
-                    }
-                },
-            },
-        )
 
     item_tex_data = {f"splat_gem_{v['idx']}": {"textures": f"textures/items/splat_gem_{v['idx']}"} for v in variants}
     write_json(
