@@ -9,6 +9,11 @@ dependencies = [
     "plyfile>=1.0.0",
     "click>=8.0.0",
     "pillow>=12.3.0",
+    "scipy>=1.15.3",
+    "scikit-image>=0.25.2",
+    "numba>=0.68.1",
+    "trimesh>=5.2.1",
+    "fast-simplification>=0.2.0",
 ]
 
 [project.scripts]

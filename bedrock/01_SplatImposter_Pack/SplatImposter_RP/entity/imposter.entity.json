@@ -1,0 +1,57 @@
+{
+  "format_version": "1.10.0",
+  "minecraft:client_entity": {
+    "description": {
+      "identifier": "custom:imposter",
+      "materials": {
+        "default": "imposter_alphablend"
+      },
+      "textures": {
+        "default": "textures/entity/spritesheet_1",
+        "gem_0": "textures/entity/spritesheet_0",
+        "gem_1": "textures/entity/spritesheet_1",
+        "gem_2": "textures/entity/spritesheet_2",
+        "gem_3": "textures/entity/spritesheet_3",
+        "gem_4": "textures/entity/spritesheet_4",
+        "gem_5": "textures/entity/spritesheet_5"
+      },
+      "geometry": {
+        "default": "geometry.imposter"
+      },
+      "animations": {
+        "align_to_baked_frame": "animation.imposter.align_to_baked_frame"
+      },
+      "scripts": {
+        "initialize": [
+          "v.cols = 16.0;",
+          "v.rows = 5.0;",
+          "v.pitch_min = -45.0;",
+          "v.pitch_max = 45.0;"
+        ],
+        "pre_animation": [
+          "v.tier = math.mod(query.variant, 3);",
+          "v.cols = (v.tier == 0) ? 12.0 : ((v.tier == 1) ? 16.0 : 24.0);",
+          "v.rows = (v.tier == 0) ? 3.0 : ((v.tier == 1) ? 5.0 : 7.0);",
+          "v.pitch_min = -45.0;",
+          "v.pitch_max = 45.0;",
+          "v.yaw_step = 360.0 / v.cols;",
+          "v.rel_cam_yaw = query.rotation_to_camera(1) - query.body_y_rotation;",
+          "v.raw_yaw = -v.rel_cam_yaw;",
+          "v.norm_yaw = math.mod(math.mod(v.raw_yaw + (v.yaw_step * 0.5), 360.0) + 360.0, 360.0);",
+          "v.col = math.clamp(math.floor(v.norm_yaw / v.yaw_step), 0, v.cols - 1);",
+          "v.snapped_yaw = -(v.col * v.yaw_step);",
+          "v.raw_pitch = math.clamp(-query.rotation_to_camera(0), v.pitch_min, v.pitch_max);",
+          "v.pitch_step = (v.pitch_max - v.pitch_min) / math.max(1, v.rows - 1);",
+          "v.row = math.clamp(math.round((v.pitch_max - v.raw_pitch) / v.pitch_step), 0, v.rows - 1);",
+          "v.snapped_pitch = -(v.pitch_max - (v.row * v.pitch_step));"
+        ],
+        "animate": [
+          "align_to_baked_frame"
+        ]
+      },
+      "render_controllers": [
+        "controller.render.imposter"
+      ]
+    }
+  }
+}

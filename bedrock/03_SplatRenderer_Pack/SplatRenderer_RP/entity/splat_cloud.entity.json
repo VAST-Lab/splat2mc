@@ -1,0 +1,33 @@
+{
+  "format_version": "1.10.0",
+  "minecraft:client_entity": {
+    "description": {
+      "identifier": "custom:splat_cloud",
+      "materials": {
+        "default": "splat_cloud_blend",
+        "core": "splat_cloud_core"
+      },
+      "textures": {
+        "default": "textures/entity/splat_cloud_1",
+        "gem_0": "textures/entity/splat_cloud_0",
+        "gem_1": "textures/entity/splat_cloud_1",
+        "gem_2": "textures/entity/splat_cloud_2",
+        "gem_3": "textures/entity/splat_cloud_3",
+        "gem_4": "textures/entity/splat_cloud_4",
+        "gem_5": "textures/entity/splat_cloud_5"
+      },
+      "geometry": {
+        "default": "geometry.splat_cloud_1",
+        "gem_0": "geometry.splat_cloud_0",
+        "gem_1": "geometry.splat_cloud_1",
+        "gem_2": "geometry.splat_cloud_2",
+        "gem_3": "geometry.splat_cloud_3",
+        "gem_4": "geometry.splat_cloud_4",
+        "gem_5": "geometry.splat_cloud_5"
+      },
+      "render_controllers": [
+        "controller.render.splat_cloud"
+      ]
+    }
+  }
+}

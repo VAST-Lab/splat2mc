@@ -1,0 +1,40 @@
+{
+  "format_version": 2,
+  "header": {
+    "name": "02 Shrinkwrap PolyMesh Pack RP",
+    "description": "Tier 2: Shrinkwrap 3DGS surface mesh + 6-view studio bake (Smooth, Detailed, and Faceted options)",
+    "uuid": "a2024991-61e0-49f1-9c2a-592837164502",
+    "version": [
+      1,
+      0,
+      0
+    ],
+    "min_engine_version": [
+      1,
+      21,
+      0
+    ]
+  },
+  "modules": [
+    {
+      "description": "Shrinkwrap poly_mesh models and 6-view textures",
+      "type": "resources",
+      "uuid": "a2024991-61e0-49f1-9c2a-592837164505",
+      "version": [
+        1,
+        0,
+        0
+      ]
+    }
+  ],
+  "dependencies": [
+    {
+      "uuid": "b2024991-61e0-49f1-9c2a-592837164501",
+      "version": [
+        1,
+        0,
+        0
+      ]
+    }
+  ]
+}

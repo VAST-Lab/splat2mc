@@ -1,0 +1,20 @@
+{
+  "format_version": "1.20.50",
+  "minecraft:item": {
+    "description": {
+      "identifier": "custom:poly_gem_item_0",
+      "menu_category": {
+        "category": "items"
+      }
+    },
+    "components": {
+      "minecraft:max_stack_size": 16,
+      "minecraft:icon": {
+        "texture": "poly_gem_0"
+      },
+      "minecraft:display_name": {
+        "value": "\u2726 Citrine Cluster [Smooth Shrinkwrap: 1280 tris]"
+      }
+    }
+  }
+}

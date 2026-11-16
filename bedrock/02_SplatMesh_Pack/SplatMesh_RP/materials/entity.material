@@ -1,0 +1,13 @@
+{
+  "materials": {
+    "version": "1.0.0",
+    "poly_gem_opaque:entity_alphatest": {
+      "-defines": [
+        "ENABLE_FOG"
+      ],
+      "+states": [
+        "DisableCulling"
+      ]
+    }
+  }
+}

@@ -1,133 +1,52 @@
 # splat2mc
 
-Convert 3D Gaussian Splats to Minecraft particle datapacks and Bedrock Edition Add-Ons.
+Convert 3D Gaussian Splats (`.ply`) into Minecraft Bedrock Edition 3-Tier Add-Ons (Angle-Pinned Spherical Imposters, Shrinkwrap `poly_mesh` 3D Models, and Full Oriented Splat Clouds) and Java Edition particle datapacks.
 
 ![demo](docs/demo.gif)
 
-## What is this?
+## Bedrock Edition 3-Tier Suite (`bedrock/`)
 
-3D Gaussian Splatting (3DGS) is a technique for reconstructing 3D scenes from photos. This repository provides pipelines to render these reconstructions in Minecraft:
-1. **Java Edition Datapack CLI:** Converts PLY splat clouds into `.mcfunction` particle commands.
-2. **Bedrock Path A — Zero-Latency Spherical Imposter (`01_Imposter_Pack`):** 100% client-side Molang angle-pinned spritesheet imposter with orthographic spherical Blender baking.
-3. **Bedrock Path B — Staggered Oriented Particle & Static Geometry Splat Renderer (`02_Oriented_Splat_Pack`):** Single-sided `DisableCulling` oriented splat particles streamed in tick-staggered batches, plus a zero-particle `.geo.json` static mesh exporter.
+The `bedrock/` directory is organized into **three separate Add-On packs** that scale upward in complexity and representation fidelity. Each pack prints its available spawn commands in chat automatically when you join the world, spawns **one gem at a time** in front of you, and supports **Crouch + Interact** to pick up any gem and **Interact** on a block to place it down:
 
-## Installation
+### 1. `bedrock/01_Imposter_Pack` — Angle-Pinned Spherical Imposter (3 Quality Tiers)
+* **Angle-Pinned Frame Alignment:** Locks the double-sided imposter plane (`north` + un-mirrored `south` UV faces) strictly to the discrete baked camera angle (`v.snapped_yaw`, `v.snapped_pitch`) so walking around the gem has zero smooth-tracking jumpiness and zero backface UV flipping.
+* **3 Angular Quality Presets Included (Citrine & Amethyst):**
+  * **Low (`12×3` = 36 angles):** `/scriptevent imposter:spawn 0` (Citrine) | `3` (Amethyst)
+  * **Medium (`16×5` = 80 angles):** `/scriptevent imposter:spawn 1` (Citrine) | `4` (Amethyst)
+  * **High (`24×7` = 168 angles):** `/scriptevent imposter:spawn 2` (Citrine) | `5` (Amethyst)
+
+### 2. `bedrock/02_Poly_Mesh_Pack` — Shrinkwrap Surface Map + 6-View Orthographic Bake (3 Mesh Styles)
+* **Shrinkwrap Surface Conforming (`tools/export_mesh.py`):** Conforms a subdivided icosphere onto the outer opacity hull of the 3DGS splat cloud with Laplacian smoothing—producing a 100% manifold, non-self-intersecting 3D crystal mesh.
+* **Continuous 6-View Studio Projection:** Renders 6 orthographic 3DGS studio views (Front, Back, Right, Left, Top, Bottom) with Euclidean distance-transform edge dilation and projects each triangle continuously onto its best-matching view (eliminating per-triangle UV seams).
+* **3 Shrinkwrap Mesh Presets Included (Citrine & Amethyst):**
+  * **Smooth Shrinkwrap (`1,280` tris):** `/scriptevent polymesh:spawn 0` (Citrine) | `3` (Amethyst)
+  * **Detailed Shrinkwrap (`5,120` tris):** `/scriptevent polymesh:spawn 1` (Citrine) | `4` (Amethyst)
+  * **Faceted Crystal (`320` tris):** `/scriptevent polymesh:spawn 2` (Citrine) | `5` (Amethyst)
+
+### 3. `bedrock/03_Full_GS_Pack` — Full Oriented Gaussian Splat Cloud & Particle Stream
+* **Static Splat Cloud Entities (`tools/export_geo_splat.py`):** Pairs a shrunk inner Shrinkwrap depth occluder (`core_mesh`) with 800, 1,500, or 2,400 tangent-aligned elliptical Gaussian splat quads packed into a single `poly_mesh` bone (`splat_cloud`).
+* **3 Splat Density Presets Included (Citrine & Amethyst):**
+  * **800 Surface Splats:** `/scriptevent splat:spawn 0` (Citrine) | `3` (Amethyst)
+  * **1,500 Surface Splats:** `/scriptevent splat:spawn 1` (Citrine) | `4` (Amethyst)
+  * **2,400 Surface Splats:** `/scriptevent splat:spawn 2` (Citrine) | `5` (Amethyst)
+* **Oriented Particle Streamer (`tools/export_oriented.py`):** Look at any block and run `/scriptevent sample:run` to stream 5,000 double-sided oriented Gaussian splat particles.
+
+---
+
+## Rebuilding the Packs from CLI
 
 ```bash
-# Clone
-git clone https://github.com/jackgladowsky/splat2mc.git
-cd splat2mc
-
-# Install with uv
+# Install dependencies
 uv sync
 
-# Or with pip
-pip install -e .
+# Build all 3 Bedrock packs (01_Imposter_Pack, 02_Poly_Mesh_Pack, 03_Full_GS_Pack)
+uv run splat2mc build-gallery
+
+# Or build a specific pack:
+uv run splat2mc build-gallery --pack 01
+uv run splat2mc build-gallery --pack 02
+uv run splat2mc build-gallery --pack 03
 ```
-
----
-
-## Bedrock Edition Suite
-
-The `bedrock/` directory contains two production-ready Add-On packs for Minecraft Bedrock Edition (latest version):
-
-### Path A: Zero-Latency Spherical Imposter (`bedrock/01_Imposter_Pack/`)
-* **Client-Side Molang:** Rotations and UV frame offsets compute at full display framerate via Molang `query.rotation_to_camera`. Zero server ticks or property synchronization needed.
-* **Angle-Pinned Alignment:** The imposter plane locks strictly to the discrete baked angles (`v.snapped_yaw`, `v.snapped_pitch`), eliminating perspective warping and swimming artifacts between frame switches.
-* **Centered Pivot Spine:** The 16×16 geometry plane pivots around `[0, 8, 0]` with origin `[-8, 0, 0]`.
-* **In-Game Usage:**
-  ```text
-  /summon custom:imposter
-  ```
-
-### Path B: Staggered Oriented Splat Particle & Static Geometry (`bedrock/02_Oriented_Splat_Pack/`)
-* **Single-Emission Oriented Particles:** Uses `splat_double_sided` material with `DisableCulling` and `DisableDepthWrite` (`materials/particles.material`), halving particle emitter calls and doubling active splat limits.
-* **Seamless Tick-Staggered Streaming:** Spreads 100-tick (5.0s) lifetime particles evenly across every tick via `ScriptBox.js`, eliminating single-tick particle lag spikes.
-* **Static `.geo.json` Exporter (`tools/export_geo_splat.py`):** Bakes PLY splats into a static Bedrock Entity Geometry (`geometry.splat_cloud`) with an accompanying RGBA palette atlas.
-* **In-Game Usage:**
-  * For particle stream: Look at the ground block and run:
-    ```text
-    /scriptevent sample:run
-    ```
-  * For static geometry cloud:
-    ```text
-    /summon custom:splat_cloud
-    ```
-
-### Installing Add-Ons to Minecraft Bedrock
-Run the `install.cmd` script inside either pack folder, or copy the `_BP` folder to `development_behavior_packs` and `_RP` folder to `development_resource_packs`.
-
----
-
-## Standalone Python Tools (`tools/`)
-
-All Python generators and exporters are consolidated in `tools/`:
-
-| Script | Description | Example Command |
-|---|---|---|
-| `export_oriented.py` | Exports PLY into oriented particle data array (`SplatData.js`) | `uv run python tools/export_oriented.py scene.ply -n 5000` |
-| `export_geo_splat.py` | Bakes PLY into static Bedrock `.geo.json` + texture atlas | `uv run python tools/export_geo_splat.py scene.ply -n 1024` |
-| `make_texture.py` | Generates Gaussian falloff 64×64 RGBA particle texture | `uv run python tools/make_texture.py` |
-| `make_spritesheet.py` | Combines rendered PNG frames into an MxN imposter atlas | `uv run python tools/make_spritesheet.py -i spritesheet -r 3` |
-| `blender_renderer.py` | Blender add-on for orthographic spherical frame baking | Install as add-on in Blender 3.0+ |
-| `export_bedrock.py` | Full standalone Bedrock Add-On exporter | `uv run python tools/export_bedrock.py scene.ply` |
-
----
-
-## Java Edition Datapack CLI
-
-### Convert a single PLY file
-
-```bash
-splat2mc convert scene.ply -o ./datapacks
-
-# Options:
-#   -n, --max-particles  Maximum particles (default: 5000)
-#   -s, --size          Target size in blocks (default: 10)
-#   --min-opacity       Minimum opacity threshold (default: 0.1)
-```
-
-### Batch convert
-
-```bash
-splat2mc batch ./splats -o ./datapacks
-```
-
-### Get info about a PLY file
-
-```bash
-splat2mc info scene.ply
-```
-
-### In Minecraft (Java Edition)
-
-1. Copy the generated datapack to your world's `datapacks/` folder
-2. Run `/reload`
-3. Run `/function splats:<name>`
-
-The particles spawn relative to your position.
-
-## Getting PLY files
-
-You can get 3DGS PLY files from:
-- [Luma AI](https://lumalabs.ai/) - Scan with your phone
-- [Polycam](https://poly.cam/) - Another scanning app
-- Train your own with [gaussian-splatting](https://github.com/graphdeco-inria/gaussian-splatting)
-
-## How it works
-
-1. **Parse PLY** - Extract position, color (from spherical harmonics), opacity, and scale
-2. **Normalize** - Scale and center to fit in Minecraft
-3. **Downsample** - Keep the most opaque splats to stay under particle limits
-4. **Generate mcfunction** - Output `/particle` commands for each splat
-5. **Package** - Create a ready-to-use datapack
-
-## Limitations
-
-- Minecraft particles are spherical, not ellipsoidal like true Gaussians
-- Limited to ~5000 particles before performance issues
-- No rotation/anisotropy - we just use average scale
-- Particles fade quickly - they're meant to be re-triggered
 
 ## License
 

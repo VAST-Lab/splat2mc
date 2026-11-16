@@ -1,0 +1,21 @@
+{
+  "materials": {
+    "version": "1.0.0",
+    "imposter_alphablend:entity_alphablend": {
+      "+defines": [
+        "USE_UV_ANIM"
+      ],
+      "-defines": [
+        "ENABLE_FOG"
+      ]
+    },
+    "imposter_alphatest:entity_alphatest": {
+      "+defines": [
+        "USE_UV_ANIM"
+      ],
+      "-defines": [
+        "ENABLE_FOG"
+      ]
+    }
+  }
+}

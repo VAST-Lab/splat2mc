@@ -1,0 +1,56 @@
+{
+  "format_version": 2,
+  "header": {
+    "name": "01 Spherical Imposter Pack BP",
+    "description": "Tier 1: Angle-pinned spherical 3DGS imposter at Low (12x3), Medium (16x5), and High (24x7) angular density",
+    "uuid": "4f183cf9-8b92-491c-b26a-8b839ef74911",
+    "version": [
+      1,
+      2,
+      0
+    ],
+    "min_engine_version": [
+      1,
+      21,
+      0
+    ]
+  },
+  "modules": [
+    {
+      "description": "Imposter entities and items",
+      "type": "data",
+      "uuid": "c3539bc7-e314-469b-b89e-3d0d34a41f6e",
+      "version": [
+        1,
+        2,
+        0
+      ]
+    },
+    {
+      "description": "Spawn commands and pickup/placement logic",
+      "type": "script",
+      "language": "javascript",
+      "uuid": "94a1f63e-52c1-443d-98ea-6217a67c52f1",
+      "version": [
+        1,
+        2,
+        0
+      ],
+      "entry": "scripts/main.js"
+    }
+  ],
+  "dependencies": [
+    {
+      "module_name": "@minecraft/server",
+      "version": "1.14.0"
+    },
+    {
+      "uuid": "a793a382-f5c7-43cf-87b6-c564175b9de3",
+      "version": [
+        1,
+        2,
+        0
+      ]
+    }
+  ]
+}

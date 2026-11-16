@@ -1,0 +1,31 @@
+{
+  "format_version": "1.10.0",
+  "minecraft:attachable": {
+    "description": {
+      "identifier": "custom:splat_gem_item_3",
+      "materials": {
+        "default": "splat_cloud_blend",
+        "core": "splat_cloud_core",
+        "enchanted": "splat_cloud_core"
+      },
+      "textures": {
+        "default": "textures/entity/splat_cloud_3",
+        "enchanted": "textures/misc/enchanted_item_glint"
+      },
+      "geometry": {
+        "default": "geometry.splat_cloud_3"
+      },
+      "animations": {
+        "held_pose": "animation.splat_cloud.held_and_dropped"
+      },
+      "scripts": {
+        "animate": [
+          "held_pose"
+        ]
+      },
+      "render_controllers": [
+        "controller.render.splat_cloud_attachable"
+      ]
+    }
+  }
+}

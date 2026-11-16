@@ -1,0 +1,24 @@
+{
+  "resource_pack_name": "Spherical Imposter Gallery RP",
+  "texture_name": "atlas.items",
+  "texture_data": {
+    "gem_0": {
+      "textures": "textures/items/gem_0"
+    },
+    "gem_1": {
+      "textures": "textures/items/gem_1"
+    },
+    "gem_2": {
+      "textures": "textures/items/gem_2"
+    },
+    "gem_3": {
+      "textures": "textures/items/gem_3"
+    },
+    "gem_4": {
+      "textures": "textures/items/gem_4"
+    },
+    "gem_5": {
+      "textures": "textures/items/gem_5"
+    }
+  }
+}

@@ -1,0 +1,40 @@
+{
+  "format_version": 2,
+  "header": {
+    "name": "03 Full Gaussian Splat Pack RP",
+    "description": "Tier 3: Full Oriented 3D Gaussian Splat Cloud visuals and double-sided particles",
+    "uuid": "78ec6229-ce0d-4d97-9bf3-8fe3584a86ea",
+    "version": [
+      1,
+      2,
+      0
+    ],
+    "min_engine_version": [
+      1,
+      21,
+      0
+    ]
+  },
+  "modules": [
+    {
+      "description": "Custom splat particles, textures, and geometries",
+      "type": "resources",
+      "uuid": "ebdde273-3e6a-4dc4-9337-2698f9767496",
+      "version": [
+        1,
+        2,
+        0
+      ]
+    }
+  ],
+  "dependencies": [
+    {
+      "uuid": "c204272a-f9df-4bb0-bd6a-d42d790854f6",
+      "version": [
+        1,
+        2,
+        0
+      ]
+    }
+  ]
+}

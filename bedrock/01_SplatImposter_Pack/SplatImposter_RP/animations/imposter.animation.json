@@ -1,0 +1,35 @@
+{
+  "format_version": "1.8.0",
+  "animations": {
+    "animation.imposter.align_to_baked_frame": {
+      "loop": true,
+      "bones": {
+        "body": {
+          "rotation": [
+            "v.snapped_pitch",
+            "v.snapped_yaw",
+            0
+          ]
+        }
+      }
+    },
+    "animation.imposter.hand_pose": {
+      "loop": true,
+      "bones": {
+        "root_item": {
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "position": [
+            0,
+            2,
+            0
+          ],
+          "scale": 0.75
+        }
+      }
+    }
+  }
+}

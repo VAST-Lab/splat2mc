@@ -1,0 +1,32 @@
+{
+  "format_version": "1.10.0",
+  "minecraft:client_entity": {
+    "description": {
+      "identifier": "custom:poly_gem",
+      "materials": {
+        "default": "poly_gem_opaque"
+      },
+      "textures": {
+        "default": "textures/entity/poly_gem_tex_0",
+        "gem_0": "textures/entity/poly_gem_tex_0",
+        "gem_1": "textures/entity/poly_gem_tex_0",
+        "gem_2": "textures/entity/poly_gem_tex_0",
+        "gem_3": "textures/entity/poly_gem_tex_1",
+        "gem_4": "textures/entity/poly_gem_tex_1",
+        "gem_5": "textures/entity/poly_gem_tex_1"
+      },
+      "geometry": {
+        "default": "geometry.poly_gem_0",
+        "gem_0": "geometry.poly_gem_0",
+        "gem_1": "geometry.poly_gem_1",
+        "gem_2": "geometry.poly_gem_2",
+        "gem_3": "geometry.poly_gem_3",
+        "gem_4": "geometry.poly_gem_4",
+        "gem_5": "geometry.poly_gem_5"
+      },
+      "render_controllers": [
+        "controller.render.poly_gem"
+      ]
+    }
+  }
+}

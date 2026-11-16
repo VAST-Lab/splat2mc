@@ -1,11 +1,14 @@
+# Build both Bedrock Edition Gem Gallery Packs (Option 2 Imposter + Option 3 High-to-Low PolyMesh & Hybrid Splat):
+uv run splat2mc build-gallery
+
+# Headless 3DGS Spherical Imposter Renderer (no Blender required):
+uv run splat2mc render-imposter Example1.ply -o bedrock/01_Imposter_Pack/Imposter_RP/textures/entity/spritesheet_0.png --icon-out bedrock/01_Imposter_Pack/Imposter_RP/textures/items/gem_0.png -c 16 -r 5 --res 160
+
+# High-to-Low 3DGS-to-PolyMesh + Hybrid Tangent Splat Baker:
+uv run splat2mc export-mesh Example2.ply --geo-out bedrock/02_Oriented_Splat_Pack/SplatRenderer_RP/models/entity/splat_cloud_1.geo.json --tex-out bedrock/02_Oriented_Splat_Pack/SplatRenderer_RP/textures/entity/splat_cloud_1.png -f 1500 --hybrid-splats 380
+
+# Oriented Particle Stream Exporter (Pack 02 /scriptevent sample:run):
+uv run python tools/export_oriented.py Example2.ply -n 5000
+
 # Java Edition Datapack:
-uv run splat2mc convert Gem01.ply -o ./bedrock/_archive/datapack_splat_particles -n 15000 -p 0.25 -s 16 --flip-y
-
-# Bedrock Edition Path B (Oriented Particle Stream):
-uv run python tools/export_oriented.py Gem01.ply -n 5000
-
-# Bedrock Edition Path B (Static Geometry .geo.json + Texture Atlas):
-uv run python tools/export_geo_splat.py Gem01.ply -n 1024
-
-# Bedrock Edition Path A (Atlas Generation from rendered frames):
-uv run python tools/make_spritesheet.py -i spritesheet -o bedrock/01_Imposter_Pack/Imposter_RP/textures/entity/spritesheet.png -r 3
+uv run splat2mc convert Example1.ply -o ./bedrock/_archive/datapack_splat_particles -n 15000 -p 0.25 -s 16 --flip-y

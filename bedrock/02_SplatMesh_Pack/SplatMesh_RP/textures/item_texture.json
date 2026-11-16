@@ -1,0 +1,24 @@
+{
+  "resource_pack_name": "02 Shrinkwrap PolyMesh Pack RP",
+  "texture_name": "atlas.items",
+  "texture_data": {
+    "poly_gem_0": {
+      "textures": "textures/items/poly_gem_0"
+    },
+    "poly_gem_1": {
+      "textures": "textures/items/poly_gem_1"
+    },
+    "poly_gem_2": {
+      "textures": "textures/items/poly_gem_2"
+    },
+    "poly_gem_3": {
+      "textures": "textures/items/poly_gem_3"
+    },
+    "poly_gem_4": {
+      "textures": "textures/items/poly_gem_4"
+    },
+    "poly_gem_5": {
+      "textures": "textures/items/poly_gem_5"
+    }
+  }
+}

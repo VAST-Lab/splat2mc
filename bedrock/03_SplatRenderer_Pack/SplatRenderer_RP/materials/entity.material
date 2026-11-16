@@ -1,0 +1,22 @@
+{
+  "materials": {
+    "version": "1.0.0",
+    "splat_cloud_core:entity_alphatest": {
+      "-defines": [
+        "ENABLE_FOG"
+      ],
+      "+states": [
+        "DisableCulling"
+      ]
+    },
+    "splat_cloud_blend:entity_alphablend": {
+      "-defines": [
+        "ENABLE_FOG"
+      ],
+      "+states": [
+        "DisableCulling",
+        "DisableDepthWrite"
+      ]
+    }
+  }
+}

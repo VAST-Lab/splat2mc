@@ -1,0 +1,18 @@
+{
+  "format_version": "1.8.0",
+  "animations": {
+    "animation.splat_cloud.held_and_dropped": {
+      "loop": true,
+      "bones": {
+        "root": {
+          "scale": 0.42,
+          "position": [
+            0,
+            3,
+            0
+          ]
+        }
+      }
+    }
+  }
+}

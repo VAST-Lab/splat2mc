@@ -1,0 +1,24 @@
+{
+  "resource_pack_name": "03 Full Gaussian Splat Pack RP",
+  "texture_name": "atlas.items",
+  "texture_data": {
+    "splat_gem_0": {
+      "textures": "textures/items/splat_gem_0"
+    },
+    "splat_gem_1": {
+      "textures": "textures/items/splat_gem_1"
+    },
+    "splat_gem_2": {
+      "textures": "textures/items/splat_gem_2"
+    },
+    "splat_gem_3": {
+      "textures": "textures/items/splat_gem_3"
+    },
+    "splat_gem_4": {
+      "textures": "textures/items/splat_gem_4"
+    },
+    "splat_gem_5": {
+      "textures": "textures/items/splat_gem_5"
+    }
+  }
+}

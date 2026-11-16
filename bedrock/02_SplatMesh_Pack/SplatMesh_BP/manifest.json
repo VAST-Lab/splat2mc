@@ -1,0 +1,56 @@
+{
+  "format_version": 2,
+  "header": {
+    "name": "02 Shrinkwrap PolyMesh Pack BP",
+    "description": "Tier 2: Shrinkwrap 3DGS surface mesh + 6-view studio bake (Smooth, Detailed, and Faceted options)",
+    "uuid": "b2024991-61e0-49f1-9c2a-592837164501",
+    "version": [
+      1,
+      0,
+      0
+    ],
+    "min_engine_version": [
+      1,
+      21,
+      0
+    ]
+  },
+  "modules": [
+    {
+      "description": "PolyMesh entities and items",
+      "type": "data",
+      "uuid": "b2024991-61e0-49f1-9c2a-592837164503",
+      "version": [
+        1,
+        0,
+        0
+      ]
+    },
+    {
+      "description": "Spawn commands and pickup/placement logic",
+      "type": "script",
+      "language": "javascript",
+      "uuid": "b2024991-61e0-49f1-9c2a-592837164504",
+      "version": [
+        1,
+        0,
+        0
+      ],
+      "entry": "scripts/main.js"
+    }
+  ],
+  "dependencies": [
+    {
+      "module_name": "@minecraft/server",
+      "version": "1.14.0"
+    },
+    {
+      "uuid": "a2024991-61e0-49f1-9c2a-592837164502",
+      "version": [
+        1,
+        0,
+        0
+      ]
+    }
+  ]
+}
