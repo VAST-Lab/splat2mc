@@ -21,12 +21,12 @@ def test_pack_01_imposter_quality_tiers_and_angle_pinning():
     assert not (rp_dir / "attachables").exists()
 
     expected_sizes = [
-        (1920, 480),  # 0: Low (12x3 @ 160px)
-        (2304, 720),  # 1: Med (16x5 @ 144px)
-        (3072, 896),  # 2: High (24x7 @ 128px)
-        (1920, 480),  # 3: Low (12x3 @ 160px)
-        (2304, 720),  # 4: Med (16x5 @ 144px)
-        (3072, 896),  # 5: High (24x7 @ 128px)
+        (3072, 1280),   # 0: Orange Low (12x5 @ 256px)
+        (8192, 4864),   # 1: Orange Med (32x19 @ 256px)
+        (16384, 6656),  # 2: Orange High (32x13 @ 512px)
+        (3072, 1280),   # 3: Purple Low (12x5 @ 256px)
+        (8192, 4864),   # 4: Purple Med (32x19 @ 256px)
+        (16384, 6656),  # 5: Purple High (32x13 @ 512px)
     ]
 
     for i, exp_size in enumerate(expected_sizes):

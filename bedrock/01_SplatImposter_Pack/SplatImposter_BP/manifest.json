@@ -2,7 +2,7 @@
   "format_version": 2,
   "header": {
     "name": "01 Spherical Imposter Pack BP",
-    "description": "Tier 1: Angle-pinned spherical 3DGS imposter at Low (12x3), Medium (16x5), and High (24x7) angular density",
+    "description": "Tier 1: Angle-pinned spherical 3DGS imposter at Low (12x5 256px), Medium (32x19 256px), and High (32x13 512px) density",
     "uuid": "4f183cf9-8b92-491c-b26a-8b839ef74911",
     "version": [
       1,

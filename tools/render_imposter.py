@@ -11,7 +11,9 @@ Outputs:
 2. A crisp 128x128 item thumbnail icon (`icon.png`) for held/inventory items.
 """
 import argparse
+from concurrent.futures import ThreadPoolExecutor
 import math
+import os
 import time
 from pathlib import Path
 import numpy as np
@@ -20,7 +22,7 @@ from PIL import Image
 from plyfile import PlyData
 
 
-@numba.njit(fastmath=True)
+@numba.njit(fastmath=True, nogil=True)
 def eval_sh_color_ortho(
     dx: float,
     dy: float,
@@ -99,7 +101,7 @@ def eval_sh_color_ortho(
     return r_out, g_out, b_out
 
 
-@numba.njit(fastmath=True)
+@numba.njit(fastmath=True, nogil=True)
 def rasterize_splats_ortho(
     H: int,
     W: int,
@@ -133,7 +135,7 @@ def rasterize_splats_ortho(
         mid = 0.5 * (cxx + cyy)
         disc = max(0.0, mid * mid - det)
         lambda_max = mid + math.sqrt(disc)
-        rad = min(64.0, math.ceil(3.0 * math.sqrt(lambda_max)))
+        rad = min(128.0, math.ceil(3.0 * math.sqrt(lambda_max)))
 
         cx = u_px[idx]
         cy = v_px[idx]
@@ -209,7 +211,7 @@ def apply_color_grade(
 class GaussianScene:
     """Loaded and pre-filtered 3D Gaussian Splat scene ready for multi-angle rendering."""
 
-    def __init__(self, ply_file: Path, max_splats: int = 350000, flip_y: bool = True):
+    def __init__(self, ply_file: Path, max_splats: int = 1200000, flip_y: bool = True):
         t0 = time.time()
         self.ply_file = Path(ply_file)
         plydata = PlyData.read(str(ply_file))
@@ -229,8 +231,8 @@ class GaussianScene:
         sz = np.exp(np.array(v["scale_2"], dtype=np.float32))
         s_max = np.maximum(np.maximum(sx, sy), sz)
 
-        # Filter out low-opacity background fog and huge background floaters
-        scale_cap = np.percentile(s_max, 92)
+        # Filter out low-opacity background fog and only extreme giant floaters (>99.5th pct scale)
+        scale_cap = np.percentile(s_max, 99.5)
         mask = np.where((op > 0.025) & (s_max <= scale_cap))[0]
         if len(mask) > max_splats:
             # Keep highest opacity splats
@@ -259,23 +261,40 @@ class GaussianScene:
         mask = mask[in_box]
         x, y, z = x[in_box], y[in_box], z[in_box]
 
-        # Center using core percentiles
-        cx = 0.5 * (np.percentile(x, 3) + np.percentile(x, 97))
-        cy = 0.5 * (np.percentile(y, 3) + np.percentile(y, 97))
-        cz = 0.5 * (np.percentile(z, 3) + np.percentile(z, 97))
-        self.x = (x - cx).astype(np.float32)
-        self.y = (y - cy).astype(np.float32)
-        self.z = (z - cz).astype(np.float32)
-
-        span_x = float(np.percentile(self.x, 98) - np.percentile(self.x, 2))
-        span_y = float(np.percentile(self.y, 98) - np.percentile(self.y, 2))
-        span_z = float(np.percentile(self.z, 98) - np.percentile(self.z, 2))
-        self.span = max(span_x, span_y, span_z, 1e-4)
-
         self.op = op[mask].astype(np.float32)
         self.sx = sx[mask].astype(np.float32)
         self.sy = sy[mask].astype(np.float32)
         self.sz = sz[mask].astype(np.float32)
+
+        # Center using [0.1, 99.9] bounds of visible splats so protruding spires stay balanced
+        vis = self.op > 0.08
+        if int(np.sum(vis)) < 100:
+            vis = np.ones(len(x), dtype=bool)
+        vx, vy, vz = x[vis], y[vis], z[vis]
+        cx = 0.5 * (float(np.percentile(vx, 0.1)) + float(np.percentile(vx, 99.9)))
+        cy = 0.5 * (float(np.percentile(vy, 0.1)) + float(np.percentile(vy, 99.9)))
+        cz = 0.5 * (float(np.percentile(vz, 0.1)) + float(np.percentile(vz, 99.9)))
+        self.x = (x - cx).astype(np.float32)
+        self.y = (y - cy).astype(np.float32)
+        self.z = (z - cz).astype(np.float32)
+
+        # Compute worst-case 2D projected extent across spherical camera angles
+        # so rotated/diagonal views (e.g. yaw=120, pitch=±45) never clip at tile edges.
+        vx_c, vy_c, vz_c = self.x[vis], self.y[vis], self.z[vis]
+        vs_pad = 2.5 * np.maximum(np.maximum(self.sx[vis], self.sy[vis]), self.sz[vis])
+        max_half = 1e-4
+        for pitch_deg in (-80.0, -75.0, -60.0, -45.0, -30.0, -15.0, 0.0, 15.0, 30.0, 45.0, 60.0, 75.0, 80.0):
+            p_rad = math.radians(pitch_deg)
+            sp, cp = math.sin(p_rad), math.cos(p_rad)
+            for yaw_deg in range(0, 360, 15):
+                y_rad = math.radians(yaw_deg)
+                sy_a, cy_a = math.sin(y_rad), math.cos(y_rad)
+                u_proj = vx_c * cy_a - vz_c * sy_a
+                v_proj = -(-vx_c * sy_a * sp + vy_c * cp - vz_c * cy_a * sp)
+                half_u = float(np.percentile(np.abs(u_proj) + vs_pad, 99.9))
+                half_v = float(np.percentile(np.abs(v_proj) + vs_pad, 99.9))
+                max_half = max(max_half, half_u, half_v)
+        self.span = max(2.0 * max_half, 1e-4)
 
         rw = np.array(v["rot_0"], dtype=np.float32)[mask]
         rx = np.array(v["rot_1"], dtype=np.float32)[mask]
@@ -321,7 +340,7 @@ class GaussianScene:
         yaw_deg: float,
         pitch_deg: float,
         tile_res: int = 256,
-        fill_ratio: float = 0.80,
+        fill_ratio: float = 0.86,
         hue_shift_deg: float = 0.0,
     ) -> Image.Image:
         """
@@ -420,8 +439,8 @@ class GaussianScene:
         # Un-premultiply RGB so alpha-blended edges in Minecraft have zero dark fringes
         safe_a = np.maximum(alpha[..., None], 1e-5)
         rgb_unpremult = np.clip(rgb / safe_a, 0.0, 1.0)
-        # Clean out ultra-faint floaters (< 2% alpha)
-        clean_alpha = np.where(alpha < 0.02, 0.0, np.clip((alpha - 0.02) / 0.98, 0.0, 1.0))
+        # Clean out ultra-faint floaters (< 4% alpha) and solidify dense rock/crystal interiors
+        clean_alpha = np.where(alpha < 0.04, 0.0, np.clip((alpha - 0.04) / 0.62, 0.0, 1.0))
 
         rgba = np.dstack([
             (rgb_unpremult[..., 0] * 255.0).astype(np.uint8),
@@ -436,47 +455,105 @@ def render_imposter_atlas(
     scene: GaussianScene,
     output_atlas: Path,
     output_icon: Path | None = None,
-    cols: int = 16,
-    rows: int = 5,
-    tile_res: int = 192,
-    pitch_min: float = -45.0,
-    pitch_max: float = 45.0,
+    cols: int = 32,
+    rows: int = 19,
+    tile_res: int = 256,
+    pitch_min: float = -72.0,
+    pitch_max: float = 72.0,
     hue_shift_deg: float = 0.0,
+    supersample_res: int = 1024,
+    trim: bool = True,
 ) -> None:
-    """Render full MxN spherical imposter atlas and optional item thumbnail icon."""
+    """Render full MxN spherical imposter atlas (supersampled + globally trimmed) and optional icon."""
     t0 = time.time()
-    atlas = Image.new("RGBA", (cols * tile_res, rows * tile_res), (0, 0, 0, 0))
+    render_res = max(tile_res, supersample_res)
     yaw_step = 360.0 / cols
     pitch_step = (pitch_max - pitch_min) / max(1, rows - 1)
 
+    tasks = []
     for r_idx in range(rows):
         pitch_deg = pitch_max - r_idx * pitch_step
         for c_idx in range(cols):
             yaw_deg = c_idx * yaw_step
-            frame = scene.render_view(
-                yaw_deg=yaw_deg,
-                pitch_deg=pitch_deg,
-                tile_res=tile_res,
-                hue_shift_deg=hue_shift_deg,
-            )
-            atlas.paste(frame, (c_idx * tile_res, r_idx * tile_res))
+            tasks.append((r_idx, c_idx, yaw_deg, pitch_deg))
+
+    # Warm up Numba JIT on the first view before launching worker threads
+    first_r, first_c, first_y, first_p = tasks[0]
+    first_img = scene.render_view(
+        yaw_deg=first_y,
+        pitch_deg=first_p,
+        tile_res=render_res,
+        hue_shift_deg=hue_shift_deg,
+    )
+    rendered: dict[tuple[int, int], Image.Image] = {(first_r, first_c): first_img}
+
+    def _render_one(item: tuple[int, int, float, float]) -> tuple[int, int, Image.Image]:
+        r_i, c_i, y_d, p_d = item
+        img = scene.render_view(
+            yaw_deg=y_d,
+            pitch_deg=p_d,
+            tile_res=render_res,
+            hue_shift_deg=hue_shift_deg,
+        )
+        return r_i, c_i, img
+
+    workers = min(12, max(1, (os.cpu_count() or 4) // 2))
+    if len(tasks) > 1:
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            for r_i, c_i, img in pool.map(_render_one, tasks[1:]):
+                rendered[(r_i, c_i)] = img
+
+    # Global symmetric square crop around tile center so every frame stays aligned and maximizes fill
+    crop_box = (0, 0, render_res, render_res)
+    if trim:
+        half_center = render_res * 0.5
+        max_half = 0
+        for img in rendered.values():
+            alpha_arr = np.asarray(img)[:, :, 3]
+            ys, xs = np.where(alpha_arr > 8)
+            if len(xs) > 0:
+                hx = max(abs(float(xs.min()) - half_center), abs(float(xs.max()) - half_center))
+                hy = max(abs(float(ys.min()) - half_center), abs(float(ys.max()) - half_center))
+                max_half = max(max_half, int(math.ceil(max(hx, hy))))
+        if max_half > 0:
+            pad = max(6, render_res // 128)
+            half = min(render_res // 2, max_half + pad)
+            c0 = render_res // 2 - half
+            c1 = render_res // 2 + half
+            crop_box = (c0, c0, c1, c1)
+
+    atlas = Image.new("RGBA", (cols * tile_res, rows * tile_res), (0, 0, 0, 0))
+    for (r_idx, c_idx), frame in rendered.items():
+        if crop_box != (0, 0, render_res, render_res):
+            frame = frame.crop(crop_box)
+        if frame.size != (tile_res, tile_res):
+            frame = frame.resize((tile_res, tile_res), Image.Resampling.LANCZOS)
+        atlas.paste(frame, (c_idx * tile_res, r_idx * tile_res))
 
     output_atlas.parent.mkdir(parents=True, exist_ok=True)
     atlas.save(output_atlas, optimize=True)
     print(
-        f"✓ Saved {cols}x{rows} spherical imposter atlas ({cols * tile_res}x{rows * tile_res} px) "
-        f"to {output_atlas} in {time.time() - t0:.2f}s"
+        f"✓ Saved {cols}x{rows} spherical imposter atlas ({cols * tile_res}x{rows * tile_res} px, "
+        f"rendered @{render_res}px crop={crop_box[2]-crop_box[0]}px) to {output_atlas} in {time.time() - t0:.2f}s"
     )
 
     if output_icon is not None:
-        # Render a crisp 128x128 3/4 view thumbnail for inventory item icon
-        icon_img = scene.render_view(
+        # Render a crisp 128x128 3/4 view thumbnail (supersampled from 512px and tightly cropped)
+        icon_hi = scene.render_view(
             yaw_deg=-15.0,
             pitch_deg=18.0,
-            tile_res=128,
-            fill_ratio=0.84,
+            tile_res=512,
+            fill_ratio=0.86,
             hue_shift_deg=hue_shift_deg,
         )
+        icon_alpha = np.asarray(icon_hi)[:, :, 3]
+        iys, ixs = np.where(icon_alpha > 8)
+        if len(ixs) > 0:
+            ihx = max(abs(float(ixs.min()) - 256), abs(float(ixs.max()) - 256))
+            ihy = max(abs(float(iys.min()) - 256), abs(float(iys.max()) - 256))
+            ihalf = min(256, int(math.ceil(max(ihx, ihy))) + 8)
+            icon_hi = icon_hi.crop((256 - ihalf, 256 - ihalf, 256 + ihalf, 256 + ihalf))
+        icon_img = icon_hi.resize((128, 128), Image.Resampling.LANCZOS)
         output_icon.parent.mkdir(parents=True, exist_ok=True)
         icon_img.save(output_icon, optimize=True)
         print(f"✓ Saved 128x128 item thumbnail icon to {output_icon}")
@@ -500,11 +577,12 @@ if __name__ == "__main__":
         default=None,
         help="Optional output path for 128x128 item thumbnail icon PNG",
     )
-    parser.add_argument("-c", "--cols", type=int, default=16, help="Number of yaw columns (default: 16)")
-    parser.add_argument("-r", "--rows", type=int, default=5, help="Number of pitch rows (default: 5)")
-    parser.add_argument("--res", type=int, default=192, help="Per-tile resolution in pixels (default: 192)")
-    parser.add_argument("--pitch-min", type=float, default=-45.0, help="Minimum pitch angle in degrees")
-    parser.add_argument("--pitch-max", type=float, default=45.0, help="Maximum pitch angle in degrees")
+    parser.add_argument("-c", "--cols", type=int, default=32, help="Number of yaw columns (default: 32)")
+    parser.add_argument("-r", "--rows", type=int, default=19, help="Number of pitch rows (default: 19)")
+    parser.add_argument("--res", type=int, default=256, help="Per-tile resolution in pixels (default: 256)")
+    parser.add_argument("--supersample", type=int, default=1024, help="Render resolution before crop/downsample (default: 1024)")
+    parser.add_argument("--pitch-min", type=float, default=-72.0, help="Minimum pitch angle in degrees")
+    parser.add_argument("--pitch-max", type=float, default=72.0, help="Maximum pitch angle in degrees")
     parser.add_argument("--hue-shift", type=float, default=0.0, help="Optional hue shift in degrees")
     parser.add_argument("--no-flip-y", action="store_true", help="Do not flip PLY Y axis")
 
@@ -520,4 +598,5 @@ if __name__ == "__main__":
         pitch_min=args.pitch_min,
         pitch_max=args.pitch_max,
         hue_shift_deg=args.hue_shift,
+        supersample_res=args.supersample,
     )

@@ -126,9 +126,9 @@ def batch(splat_dir: Path, output: Path, max_particles: int):
     help="Output spherical spritesheet PNG path",
 )
 @click.option("--icon-out", type=click.Path(path_type=Path), default=None, help="Optional 128x128 item icon PNG path")
-@click.option("-c", "--cols", type=int, default=16, help="Yaw columns (default: 16)")
-@click.option("-r", "--rows", type=int, default=5, help="Pitch rows (default: 5)")
-@click.option("--res", type=int, default=144, help="Tile resolution in px (default: 144)")
+@click.option("-c", "--cols", type=int, default=32, help="Yaw columns (default: 32)")
+@click.option("-r", "--rows", type=int, default=19, help="Pitch rows (default: 19)")
+@click.option("--res", type=int, default=256, help="Tile resolution in px (default: 256)")
 @click.option("--hue-shift", type=float, default=0.0, help="Hue shift in degrees")
 def render_imposter_cmd(
     ply_file: Path,

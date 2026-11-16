@@ -2,14 +2,14 @@ import { world, system, ItemStack } from "@minecraft/server";
 import { ActionFormData, FormCancelationReason } from "@minecraft/server-ui";
 
 const PACK_TITLE = "01_Imposter_Pack (Spherical Imposter)";
-const PACK_SUBTITLE = "Angle-Pinned 3DGS Imposter (Low 12x3, Med 16x5, High 24x7)";
+const PACK_SUBTITLE = "Angle-Pinned 3DGS Imposter (Low 12x5 256px, Med 32x19 256px, High 32x13 512px)";
 const CMD_PREFIX = "imposter";
 const ENTITY_ID = "custom:imposter";
 const ITEM_PREFIX = "custom:gem_item_";
 const ICON_PREFIX = "textures/items/gem_";
 const MENU_ITEM_ID = "custom:imposter_menu";
 const CATALOG_NAME = "Imposter Gem Catalog";
-const GEM_NAMES = ["Citrine Cluster [Low: 12x3 = 36 Angles]", "Citrine Cluster [Medium: 16x5 = 80 Angles]", "Citrine Cluster [High: 24x7 = 168 Angles]", "Amethyst Geode [Low: 12x3 = 36 Angles]", "Amethyst Geode [Medium: 16x5 = 80 Angles]", "Amethyst Geode [High: 24x7 = 168 Angles]"];
+const GEM_NAMES = ["Citrine Cluster [Low: 12x5 = 60 Angles, 256px]", "Citrine Cluster [Medium: 32x19 = 608 Angles, 256px]", "Citrine Cluster [High: 32x13 = 416 Angles, 512px]", "Amethyst Geode [Low: 12x5 = 60 Angles, 256px]", "Amethyst Geode [Medium: 32x19 = 608 Angles, 256px]", "Amethyst Geode [High: 32x13 = 416 Angles, 512px]"];
 const SLUG_MAP = {"low_citrine": 0, "med_citrine": 1, "high_citrine": 2, "low_amethyst": 3, "med_amethyst": 4, "high_amethyst": 5, "0": 0, "1": 1, "2": 2, "3": 3, "4": 4, "5": 5};
 
 const interactCooldown = new Map();

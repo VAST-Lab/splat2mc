@@ -23,17 +23,17 @@
       },
       "scripts": {
         "initialize": [
-          "v.cols = 16.0;",
-          "v.rows = 5.0;",
-          "v.pitch_min = -45.0;",
-          "v.pitch_max = 45.0;"
+          "v.cols = 32.0;",
+          "v.rows = 19.0;",
+          "v.pitch_min = -72.0;",
+          "v.pitch_max = 72.0;"
         ],
         "pre_animation": [
           "v.tier = math.mod(query.variant, 3);",
-          "v.cols = (v.tier == 0) ? 12.0 : ((v.tier == 1) ? 16.0 : 24.0);",
-          "v.rows = (v.tier == 0) ? 3.0 : ((v.tier == 1) ? 5.0 : 7.0);",
-          "v.pitch_min = -45.0;",
-          "v.pitch_max = 45.0;",
+          "v.cols = (v.tier == 0) ? 12.0 : 32.0;",
+          "v.rows = (v.tier == 0) ? 5.0 : ((v.tier == 1) ? 19.0 : 13.0);",
+          "v.pitch_min = (v.tier == 0) ? -60.0 : -72.0;",
+          "v.pitch_max = (v.tier == 0) ? 60.0 : 72.0;",
           "v.yaw_step = 360.0 / v.cols;",
           "v.rel_cam_yaw = query.rotation_to_camera(1) - query.body_y_rotation;",
           "v.raw_yaw = -v.rel_cam_yaw;",

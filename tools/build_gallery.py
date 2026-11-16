@@ -520,16 +520,16 @@ system.afterEvents.scriptEventReceive.subscribe((event) => {{
 
 def build_pack_01_imposter(repo_root: Path, scenes: dict[str, GaussianScene]) -> None:
     """
-    Build Pack 01 (`bedrock/01_Imposter_Pack`):
+    Build Pack 01 (`bedrock/01_SplatImposter_Pack`):
     - Angle-Pinned Spherical Imposter (`v.snapped_yaw`, `v.snapped_pitch`) so the quad locks to the
       baked camera angle and steps crisply without smooth-tracking jumpiness!
     - 3 Quality Tiers x 2 Gems = 6 Variants:
-      * 0: Citrine [Low: 12x3 (36 angles)]
-      * 1: Citrine [Medium: 16x5 (80 angles)]
-      * 2: Citrine [High: 24x7 (168 angles)]
-      * 3: Amethyst [Low: 12x3 (36 angles)]
-      * 4: Amethyst [Medium: 16x5 (80 angles)]
-      * 5: Amethyst [High: 24x7 (168 angles)]
+      * 0: Citrine [Low: 12x5 (60 angles, pitch ±60° @ 256px)]
+      * 1: Citrine [Medium: 32x19 (608 angles, pitch ±72° @ 256px)]
+      * 2: Citrine [High: 32x13 (416 angles, pitch ±72° @ 512px)]
+      * 3: Amethyst [Low: 12x5 (60 angles, pitch ±60° @ 256px)]
+      * 4: Amethyst [Medium: 32x19 (608 angles, pitch ±72° @ 256px)]
+      * 5: Amethyst [High: 32x13 (416 angles, pitch ±72° @ 512px)]
     """
     print("\n=== Building Pack 01: 01_SplatImposter_Pack (Angle-Pinned Spherical Imposter — 3 Quality Tiers) ===")
     pack_dir = repo_root / "bedrock" / "01_SplatImposter_Pack"
@@ -537,17 +537,30 @@ def build_pack_01_imposter(repo_root: Path, scenes: dict[str, GaussianScene]) ->
     rp_dir = pack_dir / "SplatImposter_RP"
 
     variants = [
-        {"idx": 0, "slug": "low_citrine",   "label": "Citrine Cluster [Low: 12x3 = 36 Angles]",      "ply": "Example1.ply", "cols": 12, "rows": 3, "res": 160},
-        {"idx": 1, "slug": "med_citrine",   "label": "Citrine Cluster [Medium: 16x5 = 80 Angles]",   "ply": "Example1.ply", "cols": 16, "rows": 5, "res": 144},
-        {"idx": 2, "slug": "high_citrine",  "label": "Citrine Cluster [High: 24x7 = 168 Angles]",    "ply": "Example1.ply", "cols": 24, "rows": 7, "res": 128},
-        {"idx": 3, "slug": "low_amethyst",  "label": "Amethyst Geode [Low: 12x3 = 36 Angles]",       "ply": "Example2.ply", "cols": 12, "rows": 3, "res": 160},
-        {"idx": 4, "slug": "med_amethyst",  "label": "Amethyst Geode [Medium: 16x5 = 80 Angles]",    "ply": "Example2.ply", "cols": 16, "rows": 5, "res": 144},
-        {"idx": 5, "slug": "high_amethyst", "label": "Amethyst Geode [High: 24x7 = 168 Angles]",     "ply": "Example2.ply", "cols": 24, "rows": 7, "res": 128},
+        {"idx": 0, "slug": "low_citrine",   "label": "Citrine Cluster [Low: 12x5 = 60 Angles, 256px]",     "ply": "Example1.ply", "cols": 12, "rows": 5,  "res": 256, "pitch_min": -60.0, "pitch_max": 60.0},
+        {"idx": 1, "slug": "med_citrine",   "label": "Citrine Cluster [Medium: 32x19 = 608 Angles, 256px]", "ply": "Example1.ply", "cols": 32, "rows": 19, "res": 256, "pitch_min": -72.0, "pitch_max": 72.0},
+        {"idx": 2, "slug": "high_citrine",  "label": "Citrine Cluster [High: 32x13 = 416 Angles, 512px]",   "ply": "Example1.ply", "cols": 32, "rows": 13, "res": 512, "pitch_min": -72.0, "pitch_max": 72.0},
+        {"idx": 3, "slug": "low_amethyst",  "label": "Amethyst Geode [Low: 12x5 = 60 Angles, 256px]",      "ply": "Example2.ply", "cols": 12, "rows": 5,  "res": 256, "pitch_min": -60.0, "pitch_max": 60.0},
+        {"idx": 4, "slug": "med_amethyst",  "label": "Amethyst Geode [Medium: 32x19 = 608 Angles, 256px]",  "ply": "Example2.ply", "cols": 32, "rows": 19, "res": 256, "pitch_min": -72.0, "pitch_max": 72.0},
+        {"idx": 5, "slug": "high_amethyst", "label": "Amethyst Geode [High: 32x13 = 416 Angles, 512px]",    "ply": "Example2.ply", "cols": 32, "rows": 13, "res": 512, "pitch_min": -72.0, "pitch_max": 72.0},
     ]
+
+    # Remove stale files from previous 6-variant layout if present
+    for stale_idx in range(len(variants), 6):
+        for p in [
+            bp_dir / "items" / f"gem_item_{stale_idx}.json",
+            rp_dir / "textures" / "entity" / f"spritesheet_{stale_idx}.png",
+            rp_dir / "textures" / "items" / f"gem_{stale_idx}.png",
+        ]:
+            if p.exists():
+                p.unlink()
 
     for v in variants:
         i = v["idx"]
-        scene = scenes[v["ply"]]
+        scene = scenes.get(v["ply"])
+        if scene is None:
+            print(f"! Skipping variant {i} ({v['slug']}): {v['ply']} not found on disk.")
+            continue
         atlas_out = rp_dir / "textures" / "entity" / f"spritesheet_{i}.png"
         icon_out = rp_dir / "textures" / "items" / f"gem_{i}.png"
         render_imposter_atlas(
@@ -557,8 +570,8 @@ def build_pack_01_imposter(repo_root: Path, scenes: dict[str, GaussianScene]) ->
             cols=v["cols"],
             rows=v["rows"],
             tile_res=v["res"],
-            pitch_min=-45.0,
-            pitch_max=45.0,
+            pitch_min=v["pitch_min"],
+            pitch_max=v["pitch_max"],
         )
         if i == 1:
             (rp_dir / "textures" / "entity" / "spritesheet.png").write_bytes(atlas_out.read_bytes())
@@ -570,7 +583,7 @@ def build_pack_01_imposter(repo_root: Path, scenes: dict[str, GaussianScene]) ->
             "format_version": 2,
             "header": {
                 "name": "01 Spherical Imposter Pack BP",
-                "description": "Tier 1: Angle-pinned spherical 3DGS imposter at Low (12x3), Medium (16x5), and High (24x7) angular density",
+                "description": "Tier 1: Angle-pinned spherical 3DGS imposter at Low (12x5 256px), Medium (32x19 256px), and High (32x13 512px) density",
                 "uuid": "4f183cf9-8b92-491c-b26a-8b839ef74911",
                 "version": [1, 2, 0],
                 "min_engine_version": [1, 21, 0],
@@ -605,7 +618,7 @@ def build_pack_01_imposter(repo_root: Path, scenes: dict[str, GaussianScene]) ->
             "format_version": 2,
             "header": {
                 "name": "01 Spherical Imposter Pack RP",
-                "description": "Tier 1: Angle-pinned spherical 3DGS imposter visuals (12x3, 16x5, 24x7 quality presets)",
+                "description": "Tier 1: Angle-pinned spherical 3DGS imposter visuals (12x5 256px, 32x19 256px, 32x13 512px presets)",
                 "uuid": "a793a382-f5c7-43cf-87b6-c564175b9de3",
                 "version": [1, 2, 0],
                 "min_engine_version": [1, 21, 0],
@@ -686,7 +699,7 @@ def build_pack_01_imposter(repo_root: Path, scenes: dict[str, GaussianScene]) ->
     (bp_dir / "scripts" / "main.js").write_text(
         generate_pack_script_js(
             pack_title="01_Imposter_Pack (Spherical Imposter)",
-            pack_subtitle="Angle-Pinned 3DGS Imposter (Low 12x3, Med 16x5, High 24x7)",
+            pack_subtitle="Angle-Pinned 3DGS Imposter (Low 12x5 256px, Med 32x19 256px, High 32x13 512px)",
             cmd_prefix="imposter",
             entity_id="custom:imposter",
             item_prefix="custom:gem_item_",
@@ -769,16 +782,48 @@ def build_pack_01_imposter(repo_root: Path, scenes: dict[str, GaussianScene]) ->
     )
 
     # Client Entity (`Imposter_RP/entity/imposter.entity.json`)
-    # Dynamically selects cols/rows based on variant:
-    # - variant 0, 3 -> Low  (12 cols x 3 rows)
-    # - variant 1, 4 -> Med  (16 cols x 5 rows)
-    # - variant 2, 5 -> High (24 cols x 7 rows)
+    # Dynamically selects cols/rows/pitch bounds based on variant:
+    # - variant 0, 3 -> Low  (12 cols x 5 rows, pitch -60..+60 in 30° steps @ 256px)
+    # - variant 1, 4 -> Med  (32 cols x 19 rows, pitch -72..+72 in 8° steps @ 256px)
+    # - variant 2, 5 -> High (32 cols x 13 rows, pitch -72..+72 in 12° steps @ 512px)
     # And locks the bone rotation (`v.snapped_yaw = -(v.col * v.yaw_step)`, `v.snapped_pitch`)
     # to the exact discrete world angle the baked frame was rendered from!
     textures_map = {"default": "textures/entity/spritesheet_1"}
     for v in variants:
         i = v["idx"]
         textures_map[f"gem_{i}"] = f"textures/entity/spritesheet_{i}"
+
+    write_json(
+        rp_dir / "render_controllers" / "imposter.render_controllers.json",
+        {
+            "format_version": "1.8.0",
+            "render_controllers": {
+                "controller.render.imposter": {
+                    "arrays": {
+                        "textures": {
+                            "Array.gem_sheets": [f"Texture.gem_{v['idx']}" for v in variants]
+                        }
+                    },
+                    "geometry": "Geometry.default",
+                    "materials": [{"*": "Material.default"}],
+                    "textures": ["Array.gem_sheets[query.variant]"],
+                    "uv_anim": {
+                        "offset": ["v.col / v.cols", "v.row / v.rows"],
+                        "scale": ["1.0 / v.cols", "1.0 / v.rows"],
+                    },
+                }
+            },
+        },
+    )
+
+    write_json(
+        rp_dir / "textures" / "item_texture.json",
+        {
+            "resource_pack_name": "Spherical Imposter Gallery RP",
+            "texture_name": "atlas.items",
+            "texture_data": {f"gem_{v['idx']}": {"textures": f"textures/items/gem_{v['idx']}"} for v in variants},
+        },
+    )
 
     write_json(
         rp_dir / "entity" / "imposter.entity.json",
@@ -793,17 +838,17 @@ def build_pack_01_imposter(repo_root: Path, scenes: dict[str, GaussianScene]) ->
                     "animations": {"align_to_baked_frame": "animation.imposter.align_to_baked_frame"},
                     "scripts": {
                         "initialize": [
-                            "v.cols = 16.0;",
-                            "v.rows = 5.0;",
-                            "v.pitch_min = -45.0;",
-                            "v.pitch_max = 45.0;",
+                            "v.cols = 32.0;",
+                            "v.rows = 19.0;",
+                            "v.pitch_min = -72.0;",
+                            "v.pitch_max = 72.0;",
                         ],
                         "pre_animation": [
                             "v.tier = math.mod(query.variant, 3);",
-                            "v.cols = (v.tier == 0) ? 12.0 : ((v.tier == 1) ? 16.0 : 24.0);",
-                            "v.rows = (v.tier == 0) ? 3.0 : ((v.tier == 1) ? 5.0 : 7.0);",
-                            "v.pitch_min = -45.0;",
-                            "v.pitch_max = 45.0;",
+                            "v.cols = (v.tier == 0) ? 12.0 : 32.0;",
+                            "v.rows = (v.tier == 0) ? 5.0 : ((v.tier == 1) ? 19.0 : 13.0);",
+                            "v.pitch_min = (v.tier == 0) ? -60.0 : -72.0;",
+                            "v.pitch_max = (v.tier == 0) ? 60.0 : 72.0;",
                             "v.yaw_step = 360.0 / v.cols;",
                             "v.rel_cam_yaw = query.rotation_to_camera(1) - query.body_y_rotation;",
                             "v.raw_yaw = -v.rel_cam_yaw;",
@@ -1419,10 +1464,19 @@ def main() -> None:
 
     t0 = time.time()
     repo_root = Path(__file__).resolve().parent.parent
-    scenes = {
-        "Example1.ply": GaussianScene(repo_root / "Example1.ply"),
-        "Example2.ply": GaussianScene(repo_root / "Example2.ply"),
-    }
+    ex1_path = repo_root / "Example1.ply"
+    if not ex1_path.exists() and (repo_root / "source" / "Gem03.ply").exists():
+        ex1_path = repo_root / "source" / "Gem03.ply"
+    ex2_path = repo_root / "Example2.ply"
+    if not ex2_path.exists() and (repo_root / "source" / "Gem01.ply").exists():
+        ex2_path = repo_root / "source" / "Gem01.ply"
+    if not ex2_path.exists() and (repo_root / "source" / "Purple_Gem.ply").exists():
+        ex2_path = repo_root / "source" / "Purple_Gem.ply"
+    scenes = {}
+    if ex1_path.exists():
+        scenes["Example1.ply"] = GaussianScene(ex1_path)
+    if ex2_path.exists():
+        scenes["Example2.ply"] = GaussianScene(ex2_path)
 
     if args.pack in ("all", "01", "imposter"):
         build_pack_01_imposter(repo_root, scenes)

@@ -13,7 +13,7 @@
         "texture": "gem_2"
       },
       "minecraft:display_name": {
-        "value": "\u2726 Citrine Cluster [High: 24x7 = 168 Angles]"
+        "value": "\u2726 Citrine Cluster [High: 32x13 = 416 Angles, 512px]"
       }
     }
   }

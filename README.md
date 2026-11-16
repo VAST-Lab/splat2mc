@@ -11,9 +11,9 @@ The `bedrock/` directory is organized into **three separate Add-On packs** that 
 ### 1. `bedrock/01_Imposter_Pack` — Angle-Pinned Spherical Imposter (3 Quality Tiers)
 * **Angle-Pinned Frame Alignment:** Locks the double-sided imposter plane (`north` + un-mirrored `south` UV faces) strictly to the discrete baked camera angle (`v.snapped_yaw`, `v.snapped_pitch`) so walking around the gem has zero smooth-tracking jumpiness and zero backface UV flipping.
 * **3 Angular Quality Presets Included (Citrine & Amethyst):**
-  * **Low (`12×3` = 36 angles):** `/scriptevent imposter:spawn 0` (Citrine) | `3` (Amethyst)
-  * **Medium (`16×5` = 80 angles):** `/scriptevent imposter:spawn 1` (Citrine) | `4` (Amethyst)
-  * **High (`24×7` = 168 angles):** `/scriptevent imposter:spawn 2` (Citrine) | `5` (Amethyst)
+  * **Low (`12×5` = 60 angles, pitch `±60°`, `256px`):** `/scriptevent imposter:spawn 0` (Citrine) | `3` (Amethyst)
+  * **Medium (`32×19` = 608 angles, pitch `±72°`, `256px`):** `/scriptevent imposter:spawn 1` (Citrine) | `4` (Amethyst)
+  * **High (`32×13` = 416 angles, pitch `±72°`, `512px`):** `/scriptevent imposter:spawn 2` (Citrine) | `5` (Amethyst)
 
 ### 2. `bedrock/02_Poly_Mesh_Pack` — Shrinkwrap Surface Map + 6-View Orthographic Bake (3 Mesh Styles)
 * **Shrinkwrap Surface Conforming (`tools/export_mesh.py`):** Conforms a subdivided icosphere onto the outer opacity hull of the 3DGS splat cloud with Laplacian smoothing—producing a 100% manifold, non-self-intersecting 3D crystal mesh.

@@ -1,0 +1,1522 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>SplatImposter_RP — Spherical Imposter Viewer & UV Transition Lab</title>
+<style>
+  :root {
+    --bg: #0f1218;
+    --panel: #161b24;
+    --panel-alt: #1d2430;
+    --border: #2a3444;
+    --text: #e6edf5;
+    --muted: #8b9bb0;
+    --accent: #38bdf8;
+    --good: #34d399;
+    --warn: #fbbf24;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    overflow: hidden;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, sans-serif;
+    font-size: 13px;
+  }
+  .app {
+    display: flex;
+    height: 100vh;
+    width: 100vw;
+  }
+  .viewport-wrap {
+    position: relative;
+    flex: 1;
+    min-width: 0;
+    height: 100%;
+    overflow: hidden;
+    user-select: none;
+  }
+  canvas#glcanvas {
+    position: relative;
+    z-index: 2;
+    display: block;
+    width: 100%;
+    height: 100%;
+    cursor: grab;
+    touch-action: none;
+  }
+  canvas#glcanvas:active { cursor: grabbing; }
+
+  /* Synchronized CSS 3D fallback layer (used only on file:// when WebGL texImage2D is blocked by CORS) */
+  .css3d-stage {
+    position: absolute;
+    inset: 0;
+    z-index: 3;
+    pointer-events: none;
+    overflow: hidden;
+    display: none;
+  }
+  .css3d-world {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 0;
+    height: 0;
+    transform-style: preserve-3d;
+  }
+  .css3d-quad {
+    position: absolute;
+    width: 150px;
+    height: 150px;
+    left: -75px;
+    top: -75px;
+    transform-style: preserve-3d;
+    backface-visibility: visible;
+  }
+  .css3d-tile {
+    width: 100%;
+    height: 100%;
+    background-repeat: no-repeat;
+  }
+
+  .drop-overlay {
+    position: absolute;
+    inset: 12px;
+    border: 2px dashed var(--accent);
+    border-radius: 12px;
+    background: rgba(15, 18, 24, 0.85);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--accent);
+    pointer-events: none;
+    z-index: 20;
+  }
+  .drop-overlay.active { display: flex; }
+
+  .hud-top {
+    position: absolute;
+    top: 12px;
+    left: 12px;
+    right: 12px;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 10px;
+    pointer-events: none;
+    z-index: 6;
+  }
+  .hud-pill {
+    background: rgba(22, 27, 36, 0.86);
+    backdrop-filter: blur(8px);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 7px 11px;
+    box-shadow: 0 6px 20px rgba(0,0,0,0.35);
+    width: fit-content;
+    max-width: 100%;
+  }
+  .hud-pill.warn {
+    border-color: rgba(251, 191, 36, 0.45);
+    color: #fde68a;
+    font-size: 11px;
+    display: none;
+  }
+  .hud-title {
+    font-weight: 600;
+    font-size: 13px;
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .badge {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 1px 6px;
+    border-radius: 999px;
+    background: rgba(56, 189, 248, 0.16);
+    color: var(--accent);
+    border: 1px solid rgba(56, 189, 248, 0.35);
+  }
+  .hud-sub {
+    color: var(--muted);
+    font-size: 11px;
+    margin-top: 2px;
+  }
+
+  .labels-layer {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    overflow: hidden;
+    z-index: 4;
+  }
+  .world-label {
+    position: absolute;
+    transform: translate(-50%, -50%);
+    font-size: 11px;
+    font-weight: 700;
+    padding: 2px 5px;
+    border-radius: 4px;
+    background: rgba(15, 18, 24, 0.72);
+    border: 1px solid rgba(255,255,255,0.14);
+    color: #dbe7f5;
+    white-space: nowrap;
+  }
+  .world-label.south { color: #38bdf8; border-color: rgba(56, 189, 248, 0.45); }
+  .world-label.axis-x { color: #f87171; }
+  .world-label.axis-y { color: #4ade80; }
+  .world-label.axis-z { color: #60a5fa; }
+
+  .atlas-wrap {
+    position: absolute;
+    bottom: 12px;
+    left: 12px;
+    background: rgba(22, 27, 36, 0.9);
+    backdrop-filter: blur(8px);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 8px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.45);
+    z-index: 6;
+    max-width: min(420px, calc(100% - 24px));
+  }
+  .atlas-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 6px;
+    font-size: 11px;
+    color: var(--muted);
+  }
+  .atlas-header strong { color: var(--text); }
+  canvas#atlasCanvas {
+    display: block;
+    border-radius: 4px;
+    background: repeating-conic-gradient(#1f2633 0% 25%, #181e28 0% 50%) 50% / 12px 12px;
+    cursor: pointer;
+    max-width: 100%;
+    height: auto;
+  }
+
+  aside.sidebar {
+    width: 356px;
+    flex-shrink: 0;
+    height: 100%;
+    background: var(--panel);
+    border-left: 1px solid var(--border);
+    overflow-y: auto;
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  .section {
+    background: var(--panel-alt);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 11px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 9px;
+  }
+  .section h2 {
+    margin: 0;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--muted);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  label.field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 12px;
+  }
+  label.check {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    font-size: 12px;
+    user-select: none;
+  }
+  input[type="checkbox"] {
+    accent-color: var(--accent);
+    width: 15px;
+    height: 15px;
+    margin: 0;
+    cursor: pointer;
+  }
+  select, input[type="number"], button {
+    background: var(--bg);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 6px 8px;
+    font-size: 12px;
+    font-family: inherit;
+  }
+  select:focus, input[type="number"]:focus, button:focus {
+    outline: 1px solid var(--accent);
+    border-color: var(--accent);
+  }
+  button {
+    cursor: pointer;
+    font-weight: 500;
+    transition: background 0.12s, border-color 0.12s;
+  }
+  button:hover { background: #232b3a; border-color: #3b4960; }
+  button.active {
+    background: rgba(56, 189, 248, 0.16);
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+  .btn-row { display: flex; flex-wrap: wrap; gap: 6px; }
+  .btn-row button { flex: 1; min-width: 64px; padding: 5px 7px; font-size: 11px; }
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .slider-row { display: flex; flex-direction: column; gap: 3px; }
+  .slider-head {
+    display: flex;
+    justify-content: space-between;
+    font-size: 11px;
+    color: var(--muted);
+  }
+  .slider-head span.val {
+    color: var(--text);
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  input[type="range"] { width: 100%; accent-color: var(--accent); margin: 0; cursor: pointer; }
+  .meta-line { font-size: 11px; color: var(--muted); line-height: 1.4; word-break: break-word; }
+  .molang-box {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 11px;
+    line-height: 1.5;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    padding: 8px 10px;
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 2px 10px;
+  }
+  .molang-k { color: var(--muted); }
+  .molang-v { color: var(--good); text-align: right; }
+  .molang-v.hi { color: var(--accent); font-weight: 600; }
+
+  @media (max-width: 860px) {
+    .app { flex-direction: column; }
+    .viewport-wrap { height: 56vh; }
+    aside.sidebar { width: 100%; height: 44vh; border-left: none; border-top: 1px solid var(--border); }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="viewport-wrap" id="viewportWrap">
+    <canvas id="glcanvas"></canvas>
+    <div class="css3d-stage" id="css3dStage">
+      <div class="css3d-world" id="css3dWorld">
+        <div class="css3d-quad" id="css3dQuad">
+          <div class="css3d-tile" id="css3dTile"></div>
+        </div>
+      </div>
+    </div>
+    <div class="labels-layer" id="labelsLayer"></div>
+    <div class="drop-overlay" id="dropOverlay">Drop custom spritesheet PNG here</div>
+
+    <div class="hud-top">
+      <div class="hud-pill">
+        <div class="hud-title">
+          <span id="hudGemTitle">Orange — Medium</span>
+          <span class="badge" id="hudCellBadge">col 0 / 32 · row 9 / 19</span>
+        </div>
+        <div class="hud-sub">Drag to orbit around gem · Scroll to zoom · Double-click to reset</div>
+      </div>
+      <div class="hud-pill warn" id="modeNotice"></div>
+    </div>
+
+    <div class="atlas-wrap" id="atlasWrap">
+      <div class="atlas-header">
+        <strong>Atlas Grid <span id="atlasDims"></span></strong>
+        <span>Click any tile to jump camera</span>
+      </div>
+      <canvas id="atlasCanvas" width="320" height="100"></canvas>
+    </div>
+  </div>
+
+  <aside class="sidebar">
+    <div class="section">
+      <h2>Spritesheet / Iteration</h2>
+      <label class="field">
+        <span>Gem &amp; Quality Preset</span>
+        <select id="presetSelect"></select>
+      </label>
+      <div class="meta-line" id="presetMeta">Loading...</div>
+      <div class="btn-row">
+        <button id="uploadBtn" type="button">Load Custom PNG...</button>
+        <button id="reloadBtn" type="button">Reload PNG</button>
+      </div>
+      <input id="fileInput" type="file" accept="image/png,image/*" style="display:none" />
+      <div class="grid-2" id="customGridControls">
+        <label class="field">
+          <span>Cols (Yaw)</span>
+          <input id="colsInput" type="number" min="1" max="128" value="32" />
+        </label>
+        <label class="field">
+          <span>Rows (Pitch)</span>
+          <input id="rowsInput" type="number" min="1" max="64" value="19" />
+        </label>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2>Visual Grounding &amp; Reference</h2>
+      <label class="check">
+        <input type="checkbox" id="chkPedestal" checked />
+        <span>Pedestal &amp; Ground Plane (y = 0 base)</span>
+      </label>
+      <label class="check">
+        <input type="checkbox" id="chkAxesRing" checked />
+        <span>Compass Ring (N/E/S/W), Axes &amp; Angle Bins</span>
+      </label>
+      <label class="check">
+        <input type="checkbox" id="chkDebugQuad" />
+        <span>Imposter Quad Frame &amp; Normal Vectors</span>
+      </label>
+      <label class="check">
+        <input type="checkbox" id="chkAtlasMap" checked />
+        <span>Atlas Minimap Overlay</span>
+      </label>
+      <label class="field">
+        <span>Background</span>
+        <select id="bgSelect">
+          <option value="studio">Dark Studio (#0f1218)</option>
+          <option value="minecraft">Minecraft Sky Day (#7aa8ff)</option>
+          <option value="neutral">Neutral Grey (#2b303a)</option>
+          <option value="checker">Alpha Checkerboard</option>
+        </select>
+      </label>
+    </div>
+
+    <div class="section">
+      <h2>UV &amp; Rotation Logic (Experiment)</h2>
+      <label class="field">
+        <span>Transition / Alignment Mode</span>
+        <select id="modeSelect">
+          <option value="exact">Exact Minecraft (Angle-Pinned Snap)</option>
+          <option value="billboard">Smooth Billboard (No Angle Pin)</option>
+          <option value="crossfade">Bilinear Crossfade (Experimental)</option>
+        </select>
+      </label>
+      <div class="grid-2">
+        <label class="field">
+          <span>Material</span>
+          <select id="matSelect">
+            <option value="blend">Alpha Blend</option>
+            <option value="test">Alpha Test (&gt;0.5)</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>Filter</span>
+          <select id="filterSelect">
+            <option value="linear">Linear</option>
+            <option value="nearest">Nearest (Crisp)</option>
+          </select>
+        </label>
+      </div>
+      <label class="check">
+        <input type="checkbox" id="chkEdgeClamp" checked />
+        <span>Clamp Tile UVs by 0.5px (Prevent Atlas Bleed)</span>
+      </label>
+      <label class="check">
+        <input type="checkbox" id="chkFlipU" />
+        <span>Flip U (Test Geo South [-16, 16] Mirror)</span>
+      </label>
+
+      <div class="slider-row">
+        <div class="slider-head">
+          <span>Entity Body Y Rotation (body_y_rotation)</span>
+          <span class="val" id="valBodyRot">0°</span>
+        </div>
+        <input type="range" id="rngBodyRot" min="-180" max="180" step="1" value="0" />
+      </div>
+      <div class="grid-2">
+        <div class="slider-row">
+          <div class="slider-head"><span>Pitch Min</span><span class="val" id="valPitchMin">-72°</span></div>
+          <input type="range" id="rngPitchMin" min="-85" max="0" step="1" value="-72" />
+        </div>
+        <div class="slider-row">
+          <div class="slider-head"><span>Pitch Max</span><span class="val" id="valPitchMax">72°</span></div>
+          <input type="range" id="rngPitchMax" min="0" max="85" step="1" value="72" />
+        </div>
+      </div>
+      <div class="slider-row">
+        <div class="slider-head">
+          <span>Camera Distance</span>
+          <span class="val" id="valDist">3.20 b</span>
+        </div>
+        <input type="range" id="rngDist" min="1.4" max="8.0" step="0.05" value="3.2" />
+      </div>
+
+      <div class="btn-row">
+        <button id="btnReset" type="button">Reset</button>
+        <button id="btnFront" type="button">Front 0°</button>
+        <button id="btnSide" type="button">Side 90°</button>
+        <button id="btnTop" type="button">Top</button>
+        <button id="btnOrbit" type="button">Auto-Orbit</button>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2>Live Molang State <span style="font-weight:400;text-transform:none;">imposter.entity.json</span></h2>
+      <div class="molang-box" id="molangBox"></div>
+    </div>
+  </aside>
+</div>
+
+<script>
+// ============================================================================
+// 1. PRESET METADATA (Relative file references — lightweight for GitHub Pages)
+// ============================================================================
+const PRESETS = [
+  {
+    id: "orange_med",
+    label: "Orange — Medium (32×19 = 608 angles, ±72°, 256px)",
+    pack: "01_SplatImposter_Pack (variant 1 · Gem03 · 11.25° yaw × 8° pitch)",
+    path: "bedrock/01_SplatImposter_Pack/SplatImposter_RP/textures/entity/spritesheet_1.png",
+    cols: 32,
+    rows: 19,
+    pitchMin: -72,
+    pitchMax: 72
+  },
+  {
+    id: "orange_high",
+    label: "Orange — High (32×13 = 416 angles, ±72°, 512px)",
+    pack: "01_SplatImposter_Pack (variant 2 · Gem03 · PC 16384×6656)",
+    path: "bedrock/01_SplatImposter_Pack/SplatImposter_RP/textures/entity/spritesheet_2.png",
+    cols: 32,
+    rows: 13,
+    pitchMin: -72,
+    pitchMax: 72
+  },
+  {
+    id: "orange_low",
+    label: "Orange — Low (12×5 = 60 angles, ±60°, 256px)",
+    pack: "01_SplatImposter_Pack (variant 0 · Gem03 · 0/30/60° pitch)",
+    path: "bedrock/01_SplatImposter_Pack/SplatImposter_RP/textures/entity/spritesheet_0.png",
+    cols: 12,
+    rows: 5,
+    pitchMin: -60,
+    pitchMax: 60
+  },
+  {
+    id: "purple_med",
+    label: "Purple — Medium (32×19 = 608 angles, ±72°, 256px)",
+    pack: "01_SplatImposter_Pack (variant 4 · Gem01 · 11.25° yaw × 8° pitch)",
+    path: "bedrock/01_SplatImposter_Pack/SplatImposter_RP/textures/entity/spritesheet_4.png",
+    cols: 32,
+    rows: 19,
+    pitchMin: -72,
+    pitchMax: 72
+  },
+  {
+    id: "purple_high",
+    label: "Purple — High (32×13 = 416 angles, ±72°, 512px)",
+    pack: "01_SplatImposter_Pack (variant 5 · Gem01 · PC 16384×6656)",
+    path: "bedrock/01_SplatImposter_Pack/SplatImposter_RP/textures/entity/spritesheet_5.png",
+    cols: 32,
+    rows: 13,
+    pitchMin: -72,
+    pitchMax: 72
+  },
+  {
+    id: "purple_low",
+    label: "Purple — Low (12×5 = 60 angles, ±60°, 256px)",
+    pack: "01_SplatImposter_Pack (variant 3 · Gem01 · 0/30/60° pitch)",
+    path: "bedrock/01_SplatImposter_Pack/SplatImposter_RP/textures/entity/spritesheet_3.png",
+    cols: 12,
+    rows: 5,
+    pitchMin: -60,
+    pitchMax: 60
+  },
+  {
+    id: "archive_sync",
+    label: "Orange — Archive v1 (imposter_sync 16×3 = 48 angles, 512px)",
+    pack: "_archive/imposter_sync/SplatImposter_RP (Blender 512px tiles)",
+    path: "bedrock/_archive/imposter_sync/SplatImposter_RP/textures/entity/splat_imposter.png",
+    cols: 16,
+    rows: 3,
+    pitchMin: -35,
+    pitchMax: 35
+  }
+];
+
+// ============================================================================
+// 2. EXACT MINECRAFT SPLATIMPOSTER_RP LOGIC (easy to read & tweak!)
+// ============================================================================
+function clamp(v, lo, hi) {
+  return Math.max(lo, Math.min(hi, v));
+}
+
+function modPos(x, m) {
+  return ((x % m) + m) % m;
+}
+
+/**
+ * Compute all Bedrock Molang variables & UV / bone transforms for the imposter.
+ * Edit this function to test improved UV transition or snapping logic!
+ */
+function evaluateImposterMolang(camYawDeg, camPitchDeg, cfg) {
+  const cols = Math.max(1, cfg.cols);
+  const rows = Math.max(1, cfg.rows);
+  const pitchMin = cfg.pitchMin;
+  const pitchMax = Math.max(pitchMin + 0.001, cfg.pitchMax);
+  const bodyYRotation = cfg.bodyYRotation;
+
+  const rotToCam1 = -camYawDeg;
+  const rotToCam0 = -camPitchDeg;
+
+  // --- imposter.entity.json pre_animation ---
+  const yawStep = 360.0 / cols;
+  const relCamYaw = rotToCam1 - bodyYRotation;
+  const rawYaw = -relCamYaw;
+  const normYaw = modPos(modPos(rawYaw + yawStep * 0.5, 360.0) + 360.0, 360.0);
+  const col = clamp(Math.floor(normYaw / yawStep), 0, cols - 1);
+  const snappedYaw = -(col * yawStep);
+
+  const rawPitch = clamp(-rotToCam0, pitchMin, pitchMax);
+  const pitchStep = (pitchMax - pitchMin) / Math.max(1, rows - 1);
+  const row = clamp(Math.round((pitchMax - rawPitch) / pitchStep), 0, rows - 1);
+  const snappedPitch = -(pitchMax - row * pitchStep);
+
+  // Continuous coordinates for experimental bilinear crossfade mode
+  const rawYawWrapped = modPos(rawYaw, 360.0);
+  const colFloat = rawYawWrapped / yawStep;
+  const col0 = Math.floor(colFloat) % cols;
+  const col1 = (col0 + 1) % cols;
+  const colBlend = colFloat - Math.floor(colFloat);
+
+  const rowFloat = clamp((pitchMax - rawPitch) / pitchStep, 0, rows - 1);
+  const row0 = Math.floor(rowFloat);
+  const row1 = Math.min(rows - 1, row0 + 1);
+  const rowBlend = rowFloat - row0;
+
+  let quadYawDeg;
+  let quadPitchDeg;
+  if (cfg.mode === "billboard") {
+    quadYawDeg = camYawDeg;
+    quadPitchDeg = -camPitchDeg;
+  } else if (cfg.mode === "crossfade") {
+    quadYawDeg = camYawDeg;
+    quadPitchDeg = -rawPitch;
+  } else {
+    quadYawDeg = -bodyYRotation - snappedYaw;
+    quadPitchDeg = snappedPitch;
+  }
+
+  return {
+    cols,
+    rows,
+    yawStep,
+    pitchStep,
+    rotToCam0,
+    rotToCam1,
+    relCamYaw,
+    rawYaw,
+    normYaw,
+    col,
+    row,
+    snappedYaw,
+    rawPitch,
+    snappedPitch,
+    uvOffset: [col / cols, row / rows],
+    uvScale: [1.0 / cols, 1.0 / rows],
+    quadYawDeg,
+    quadPitchDeg,
+    crossfade: { col0, col1, colBlend, row0, row1, rowBlend },
+  };
+}
+
+// ============================================================================
+// 3. MINIMAL 3D MATH & WEBGL RENDERER (Zero external dependencies)
+// ============================================================================
+const DEG2RAD = Math.PI / 180;
+
+function mat4Identity() {
+  return new Float32Array([1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1]);
+}
+
+function mat4Multiply(a, b) {
+  const out = new Float32Array(16);
+  for (let c = 0; c < 4; c++) {
+    for (let r = 0; r < 4; r++) {
+      out[c * 4 + r] =
+        a[0 * 4 + r] * b[c * 4 + 0] +
+        a[1 * 4 + r] * b[c * 4 + 1] +
+        a[2 * 4 + r] * b[c * 4 + 2] +
+        a[3 * 4 + r] * b[c * 4 + 3];
+    }
+  }
+  return out;
+}
+
+function mat4Perspective(fovyRad, aspect, near, far) {
+  const f = 1.0 / Math.tan(fovyRad * 0.5);
+  const nf = 1.0 / (near - far);
+  const out = new Float32Array(16);
+  out[0] = f / aspect;
+  out[5] = f;
+  out[10] = (far + near) * nf;
+  out[11] = -1;
+  out[14] = 2 * far * near * nf;
+  return out;
+}
+
+function mat4LookAt(eye, target, up) {
+  let zx = eye[0] - target[0], zy = eye[1] - target[1], zz = eye[2] - target[2];
+  let len = Math.hypot(zx, zy, zz) || 1;
+  zx /= len; zy /= len; zz /= len;
+
+  let xx = up[1] * zz - up[2] * zy;
+  let xy = up[2] * zx - up[0] * zz;
+  let xz = up[0] * zy - up[1] * zx;
+  len = Math.hypot(xx, xy, xz) || 1;
+  xx /= len; xy /= len; xz /= len;
+
+  const yx = zy * xz - zz * xy;
+  const yy = zz * xx - zx * xz;
+  const yz = zx * xy - zy * xx;
+
+  const out = new Float32Array(16);
+  out[0] = xx; out[4] = xy; out[8]  = xz; out[12] = -(xx * eye[0] + xy * eye[1] + xz * eye[2]);
+  out[1] = yx; out[5] = yy; out[9]  = yz; out[13] = -(yx * eye[0] + yy * eye[1] + yz * eye[2]);
+  out[2] = zx; out[6] = zy; out[10] = zz; out[14] = -(zx * eye[0] + zy * eye[1] + zz * eye[2]);
+  out[3] = 0;  out[7] = 0;  out[11] = 0;  out[15] = 1;
+  return out;
+}
+
+function mat4Translate(x, y, z) {
+  const m = mat4Identity();
+  m[12] = x; m[13] = y; m[14] = z;
+  return m;
+}
+
+function mat4RotateY(rad) {
+  const c = Math.cos(rad), s = Math.sin(rad);
+  return new Float32Array([c,0,-s,0, 0,1,0,0, s,0,c,0, 0,0,0,1]);
+}
+
+function mat4RotateX(rad) {
+  const c = Math.cos(rad), s = Math.sin(rad);
+  return new Float32Array([1,0,0,0, 0,c,s,0, 0,-s,c,0, 0,0,0,1]);
+}
+
+function projectPoint(vp, p) {
+  const x = vp[0] * p[0] + vp[4] * p[1] + vp[8] * p[2] + vp[12];
+  const y = vp[1] * p[0] + vp[5] * p[1] + vp[9] * p[2] + vp[13];
+  const w = vp[3] * p[0] + vp[7] * p[1] + vp[11] * p[2] + vp[15];
+  if (w <= 0.001) return null;
+  return [(x / w) * 0.5 + 0.5, (-y / w) * 0.5 + 0.5];
+}
+
+// ============================================================================
+// 4. APPLICATION STATE & WEBGL SETUP
+// ============================================================================
+const glCanvas = document.getElementById("glcanvas");
+const atlasCanvas = document.getElementById("atlasCanvas");
+const atlasCtx = atlasCanvas.getContext("2d");
+const labelsLayer = document.getElementById("labelsLayer");
+const css3dStage = document.getElementById("css3dStage");
+const css3dWorld = document.getElementById("css3dWorld");
+const css3dQuad = document.getElementById("css3dQuad");
+const css3dTile = document.getElementById("css3dTile");
+const modeNotice = document.getElementById("modeNotice");
+
+const gl = glCanvas.getContext("webgl", { alpha: true, antialias: true, premultipliedAlpha: false });
+if (!gl) {
+  alert("WebGL is required to run this demo.");
+}
+
+function compileShader(type, src) {
+  const sh = gl.createShader(type);
+  gl.shaderSource(sh, src);
+  gl.compileShader(sh);
+  if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(sh));
+  return sh;
+}
+
+function createProgram(vsSrc, fsSrc) {
+  const p = gl.createProgram();
+  gl.attachShader(p, compileShader(gl.VERTEX_SHADER, vsSrc));
+  gl.attachShader(p, compileShader(gl.FRAGMENT_SHADER, fsSrc));
+  gl.linkProgram(p);
+  if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p));
+  return p;
+}
+
+const solidProg = createProgram(
+  `attribute vec3 aPos;
+   attribute vec3 aNorm;
+   attribute vec4 aColor;
+   uniform mat4 uMVP;
+   uniform float uLit;
+   varying vec4 vColor;
+   void main() {
+     gl_Position = uMVP * vec4(aPos, 1.0);
+     vec3 lightDir = normalize(vec3(0.45, 0.85, 0.35));
+     float diff = max(dot(normalize(aNorm), lightDir), 0.0);
+     float shade = mix(1.0, 0.52 + 0.48 * diff, uLit);
+     vColor = vec4(aColor.rgb * shade, aColor.a);
+   }`,
+  `precision mediump float;
+   varying vec4 vColor;
+   void main() { gl_FragColor = vColor; }`
+);
+
+const imposterProg = createProgram(
+  `attribute vec3 aPos;
+   attribute vec2 aUV;
+   uniform mat4 uMVP;
+   varying vec2 vUV;
+   void main() {
+     gl_Position = uMVP * vec4(aPos, 1.0);
+     vUV = aUV;
+   }`,
+  `precision mediump float;
+   uniform sampler2D uTex;
+   uniform vec2 uOffset0;
+   uniform vec2 uOffset1;
+   uniform vec2 uOffset2;
+   uniform vec2 uOffset3;
+   uniform vec2 uScale;
+   uniform vec2 uTexelPad;
+   uniform float uFlipU;
+   uniform float uCrossfade;
+   uniform float uTx;
+   uniform float uTy;
+   uniform float uAlphaCutoff;
+   varying vec2 vUV;
+
+   vec4 sampleTile(vec2 qUV, vec2 offset) {
+     vec2 clamped = clamp(qUV, uTexelPad, vec2(1.0) - uTexelPad);
+     vec2 atlasUV = clamped * uScale + offset;
+     return texture2D(uTex, atlasUV);
+   }
+
+   void main() {
+     vec2 qUV = vUV;
+     float flip = (gl_FrontFacing ? uFlipU : (1.0 - uFlipU));
+     if (flip > 0.5) qUV.x = 1.0 - qUV.x;
+     vec4 col;
+     if (uCrossfade > 0.5) {
+       vec4 c00 = sampleTile(qUV, uOffset0);
+       vec4 c10 = sampleTile(qUV, uOffset1);
+       vec4 c01 = sampleTile(qUV, uOffset2);
+       vec4 c11 = sampleTile(qUV, uOffset3);
+       vec4 p00 = vec4(c00.rgb * c00.a, c00.a);
+       vec4 p10 = vec4(c10.rgb * c10.a, c10.a);
+       vec4 p01 = vec4(c01.rgb * c01.a, c01.a);
+       vec4 p11 = vec4(c11.rgb * c11.a, c11.a);
+       vec4 pm = mix(mix(p00, p10, uTx), mix(p01, p11, uTx), uTy);
+       col = (pm.a > 0.001) ? vec4(pm.rgb / pm.a, pm.a) : vec4(0.0);
+     } else {
+       col = sampleTile(qUV, uOffset0);
+     }
+     if (col.a <= uAlphaCutoff) discard;
+     gl_FragColor = col;
+   }`
+);
+
+const quadVBO = gl.createBuffer();
+gl.bindBuffer(gl.ARRAY_BUFFER, quadVBO);
+gl.bufferData(
+  gl.ARRAY_BUFFER,
+  new Float32Array([
+    -0.75,  0.75, 0.0,  0.0, 0.0,
+    -0.75, -0.75, 0.0,  0.0, 1.0,
+     0.75, -0.75, 0.0,  1.0, 1.0,
+    -0.75,  0.75, 0.0,  0.0, 0.0,
+     0.75, -0.75, 0.0,  1.0, 1.0,
+     0.75,  0.75, 0.0,  1.0, 0.0,
+  ]),
+  gl.STATIC_DRAW
+);
+
+function buildBoxTris(cx, cy, cz, sx, sy, sz, colTop, colSide) {
+  const hx = sx * 0.5, hy = sy * 0.5, hz = sz * 0.5;
+  const x0 = cx - hx, x1 = cx + hx, y0 = cy - hy, y1 = cy + hy, z0 = cz - hz, z1 = cz + hz;
+  const faces = [
+    { n: [0,1,0], c: colTop, pts: [[x0,y1,z1],[x1,y1,z1],[x1,y1,z0],[x0,y1,z0]] },
+    { n: [0,-1,0], c: colSide, pts: [[x0,y0,z0],[x1,y0,z0],[x1,y0,z1],[x0,y0,z1]] },
+    { n: [0,0,1], c: colSide, pts: [[x0,y0,z1],[x1,y0,z1],[x1,y1,z1],[x0,y1,z1]] },
+    { n: [0,0,-1], c: colSide, pts: [[x1,y0,z0],[x0,y0,z0],[x0,y1,z0],[x1,y1,z0]] },
+    { n: [1,0,0], c: colSide, pts: [[x1,y0,z1],[x1,y0,z0],[x1,y1,z0],[x1,y1,z1]] },
+    { n: [-1,0,0], c: colSide, pts: [[x0,y0,z0],[x0,y0,z1],[x0,y1,z1],[x0,y1,z0]] },
+  ];
+  const out = [];
+  for (const f of faces) {
+    for (const k of [0,1,2, 0,2,3]) out.push(...f.pts[k], ...f.n, ...f.c);
+  }
+  return out;
+}
+
+const pedestalVerts = new Float32Array([
+  ...buildBoxTris(0, -0.02, 0, 1.12, 0.04, 1.12, [0.27, 0.31, 0.38, 1.0], [0.20, 0.24, 0.30, 1.0]),
+  ...buildBoxTris(0, -0.25, 0, 0.96, 0.42, 0.96, [0.18, 0.21, 0.27, 1.0], [0.14, 0.17, 0.22, 1.0]),
+  ...buildBoxTris(0, -0.50, 0, 1.30, 0.08, 1.30, [0.22, 0.26, 0.33, 1.0], [0.16, 0.19, 0.25, 1.0]),
+]);
+const pedestalVBO = gl.createBuffer();
+gl.bindBuffer(gl.ARRAY_BUFFER, pedestalVBO);
+gl.bufferData(gl.ARRAY_BUFFER, pedestalVerts, gl.STATIC_DRAW);
+
+const floorVerts = new Float32Array([
+  -4.0, -0.542, -4.0, 0,1,0, 0.10, 0.13, 0.18, 0.88,
+   4.0, -0.542, -4.0, 0,1,0, 0.10, 0.13, 0.18, 0.88,
+   4.0, -0.542,  4.0, 0,1,0, 0.10, 0.13, 0.18, 0.88,
+  -4.0, -0.542, -4.0, 0,1,0, 0.10, 0.13, 0.18, 0.88,
+   4.0, -0.542,  4.0, 0,1,0, 0.10, 0.13, 0.18, 0.88,
+  -4.0, -0.542,  4.0, 0,1,0, 0.10, 0.13, 0.18, 0.88,
+]);
+const floorVBO = gl.createBuffer();
+gl.bindBuffer(gl.ARRAY_BUFFER, floorVBO);
+gl.bufferData(gl.ARRAY_BUFFER, floorVerts, gl.STATIC_DRAW);
+
+const gridLinesArr = [];
+for (let i = -4; i <= 4; i++) {
+  const c = i === 0 ? [0.28, 0.35, 0.46, 0.9] : [0.20, 0.25, 0.33, 0.75];
+  gridLinesArr.push(i, -0.54, -4, 0,1,0, ...c,  i, -0.54, 4, 0,1,0, ...c);
+  gridLinesArr.push(-4, -0.54, i, 0,1,0, ...c,  4, -0.54, i, 0,1,0, ...c);
+}
+const fCol = [0.38, 0.56, 0.78, 0.75];
+gridLinesArr.push(
+  -0.5, 0.002, -0.5, 0,1,0, ...fCol,  0.5, 0.002, -0.5, 0,1,0, ...fCol,
+   0.5, 0.002, -0.5, 0,1,0, ...fCol,  0.5, 0.002,  0.5, 0,1,0, ...fCol,
+   0.5, 0.002,  0.5, 0,1,0, ...fCol, -0.5, 0.002,  0.5, 0,1,0, ...fCol,
+  -0.5, 0.002,  0.5, 0,1,0, ...fCol, -0.5, 0.002, -0.5, 0,1,0, ...fCol
+);
+const gridVBO = gl.createBuffer();
+gl.bindBuffer(gl.ARRAY_BUFFER, gridVBO);
+gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(gridLinesArr), gl.STATIC_DRAW);
+const gridVertCount = gridLinesArr.length / 10;
+
+const dynLineVBO = gl.createBuffer();
+
+function drawSolidBuffer(vbo, count, mode, mvp, lit) {
+  gl.useProgram(solidProg);
+  gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
+  const stride = 40;
+  const locPos = gl.getAttribLocation(solidProg, "aPos");
+  const locNorm = gl.getAttribLocation(solidProg, "aNorm");
+  const locCol = gl.getAttribLocation(solidProg, "aColor");
+  gl.enableVertexAttribArray(locPos);
+  gl.vertexAttribPointer(locPos, 3, gl.FLOAT, false, stride, 0);
+  gl.enableVertexAttribArray(locNorm);
+  gl.vertexAttribPointer(locNorm, 3, gl.FLOAT, false, stride, 12);
+  gl.enableVertexAttribArray(locCol);
+  gl.vertexAttribPointer(locCol, 4, gl.FLOAT, false, stride, 24);
+  gl.uniformMatrix4fv(gl.getUniformLocation(solidProg, "uMVP"), false, mvp);
+  gl.uniform1f(gl.getUniformLocation(solidProg, "uLit"), lit);
+  gl.drawArrays(mode, 0, count);
+}
+
+// ============================================================================
+// 5. TEXTURE LOADING (By relative reference + automatic file:// CSS 3D fallback)
+// ============================================================================
+const textureCache = new Map();
+let activeTexture = null;
+let activeImg = null;
+let activeSrcUrl = "";
+let activePreset = PRESETS[0];
+let css3dFallback = false;
+
+function uploadImageToTexture(img) {
+  const maxTex = gl.getParameter(gl.MAX_TEXTURE_SIZE) || 4096;
+  let src = img;
+  if (img.width > maxTex || img.height > maxTex) {
+    const scale = Math.min(maxTex / img.width, maxTex / img.height);
+    const c = document.createElement("canvas");
+    c.width = Math.floor(img.width * scale);
+    c.height = Math.floor(img.height * scale);
+    c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+    src = c;
+  }
+  const tex = gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_2D, tex);
+  gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  const filterMode = filterSelect.value === "nearest" ? gl.NEAREST : gl.LINEAR;
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, filterMode);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, filterMode);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, src);
+  return tex;
+}
+
+function applyTextureFilter() {
+  if (!activeTexture) return;
+  const filterMode = filterSelect.value === "nearest" ? gl.NEAREST : gl.LINEAR;
+  gl.bindTexture(gl.TEXTURE_2D, activeTexture);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, filterMode);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, filterMode);
+}
+
+function setFallbackMode(enabled, reason = "") {
+  css3dFallback = enabled;
+  css3dStage.style.display = enabled ? "block" : "none";
+  if (enabled) {
+    modeNotice.style.display = "block";
+    modeNotice.textContent = reason || "file:// mode (CSS 3D quad) — host on GitHub Pages / localhost or drop a PNG for full WebGL shader mode";
+  } else {
+    modeNotice.style.display = "none";
+  }
+}
+
+function loadPreset(preset, customDataUrl = null, bustCache = false) {
+  activePreset = preset;
+  colsInput.value = preset.cols;
+  rowsInput.value = preset.rows;
+  rngPitchMin.value = preset.pitchMin;
+  rngPitchMax.value = preset.pitchMax;
+  valPitchMin.textContent = preset.pitchMin + "°";
+  valPitchMax.textContent = preset.pitchMax + "°";
+  hudGemTitle.textContent = preset.label.split(" (")[0];
+
+  const srcUrl = customDataUrl || (bustCache ? `${preset.path}?t=${Date.now()}` : preset.path);
+  const cacheKey = customDataUrl ? null : (bustCache ? null : preset.id);
+
+  if (cacheKey && textureCache.has(cacheKey)) {
+    const entry = textureCache.get(cacheKey);
+    activeImg = entry.img;
+    activeSrcUrl = entry.srcUrl;
+    activeTexture = entry.tex;
+    setFallbackMode(!entry.tex);
+    if (entry.tex) applyTextureFilter();
+    updatePresetMeta();
+    drawAtlasMinimap();
+    return;
+  }
+
+  presetMeta.textContent = `Loading ${preset.path}...`;
+  const img = new Image();
+  img.onload = () => {
+    activeImg = img;
+    activeSrcUrl = srcUrl;
+    let tex = null;
+    try {
+      tex = uploadImageToTexture(img);
+      setFallbackMode(false);
+    } catch (err) {
+      // On file:// in Chromium/Edge, texImage2D throws SecurityError; fall back cleanly to CSS 3D quad
+      tex = null;
+      setFallbackMode(true);
+    }
+    activeTexture = tex;
+    if (cacheKey) textureCache.set(cacheKey, { tex, img, srcUrl });
+    updatePresetMeta();
+    drawAtlasMinimap();
+  };
+  img.onerror = () => {
+    presetMeta.textContent = `Failed to load ${srcUrl}. Ensure the bedrock/ folder is alongside this HTML file or drop a PNG.`;
+  };
+  img.src = srcUrl;
+}
+
+function updatePresetMeta() {
+  const cols = parseInt(colsInput.value, 10) || 1;
+  const rows = parseInt(rowsInput.value, 10) || 1;
+  const dims = activeImg ? `${activeImg.naturalWidth || activeImg.width}×${activeImg.naturalHeight || activeImg.height} px` : "loading...";
+  const tileW = activeImg ? Math.round((activeImg.naturalWidth || activeImg.width) / cols) : "?";
+  const tileH = activeImg ? Math.round((activeImg.naturalHeight || activeImg.height) / rows) : "?";
+  presetMeta.textContent = `${activePreset.pack} · Atlas ${dims} · Tile ${tileW}×${tileH} px · ${cols * rows} angles`;
+  atlasDims.textContent = activeImg ? `(${cols}×${rows} · ${tileW}×${tileH}px)` : "";
+}
+
+// ============================================================================
+// 6. UI ELEMENTS & CAMERA INTERACTION
+// ============================================================================
+const presetSelect = document.getElementById("presetSelect");
+const presetMeta = document.getElementById("presetMeta");
+const colsInput = document.getElementById("colsInput");
+const rowsInput = document.getElementById("rowsInput");
+const chkPedestal = document.getElementById("chkPedestal");
+const chkAxesRing = document.getElementById("chkAxesRing");
+const chkDebugQuad = document.getElementById("chkDebugQuad");
+const chkAtlasMap = document.getElementById("chkAtlasMap");
+const atlasWrap = document.getElementById("atlasWrap");
+const atlasDims = document.getElementById("atlasDims");
+const bgSelect = document.getElementById("bgSelect");
+const modeSelect = document.getElementById("modeSelect");
+const matSelect = document.getElementById("matSelect");
+const filterSelect = document.getElementById("filterSelect");
+const chkEdgeClamp = document.getElementById("chkEdgeClamp");
+const chkFlipU = document.getElementById("chkFlipU");
+const rngBodyRot = document.getElementById("rngBodyRot");
+const valBodyRot = document.getElementById("valBodyRot");
+const rngPitchMin = document.getElementById("rngPitchMin");
+const valPitchMin = document.getElementById("valPitchMin");
+const rngPitchMax = document.getElementById("rngPitchMax");
+const valPitchMax = document.getElementById("valPitchMax");
+const rngDist = document.getElementById("rngDist");
+const valDist = document.getElementById("valDist");
+const hudGemTitle = document.getElementById("hudGemTitle");
+const hudCellBadge = document.getElementById("hudCellBadge");
+const molangBox = document.getElementById("molangBox");
+const reloadBtn = document.getElementById("reloadBtn");
+const uploadBtn = document.getElementById("uploadBtn");
+const fileInput = document.getElementById("fileInput");
+const dropOverlay = document.getElementById("dropOverlay");
+const viewportWrap = document.getElementById("viewportWrap");
+
+for (const p of PRESETS) {
+  const opt = document.createElement("option");
+  opt.value = p.id;
+  opt.textContent = p.label;
+  presetSelect.appendChild(opt);
+}
+
+let camYawDeg = -25;
+let camPitchDeg = 18;
+let camDist = 3.2;
+let autoOrbit = false;
+let lastMolang = null;
+
+presetSelect.addEventListener("change", () => {
+  const found = PRESETS.find((p) => p.id === presetSelect.value);
+  if (found) loadPreset(found);
+});
+
+colsInput.addEventListener("input", () => { updatePresetMeta(); drawAtlasMinimap(); });
+rowsInput.addEventListener("input", () => { updatePresetMeta(); drawAtlasMinimap(); });
+filterSelect.addEventListener("change", applyTextureFilter);
+chkAtlasMap.addEventListener("change", () => {
+  atlasWrap.style.display = chkAtlasMap.checked ? "block" : "none";
+});
+rngBodyRot.addEventListener("input", () => { valBodyRot.textContent = rngBodyRot.value + "°"; });
+rngPitchMin.addEventListener("input", () => { valPitchMin.textContent = rngPitchMin.value + "°"; });
+rngPitchMax.addEventListener("input", () => { valPitchMax.textContent = rngPitchMax.value + "°"; });
+rngDist.addEventListener("input", () => {
+  camDist = parseFloat(rngDist.value);
+  valDist.textContent = camDist.toFixed(2) + " b";
+});
+
+document.getElementById("btnReset").addEventListener("click", () => {
+  camYawDeg = -25; camPitchDeg = 18; camDist = 3.2;
+  rngDist.value = "3.2"; valDist.textContent = "3.20 b";
+  rngBodyRot.value = "0"; valBodyRot.textContent = "0°";
+  autoOrbit = false; document.getElementById("btnOrbit").classList.remove("active");
+});
+document.getElementById("btnFront").addEventListener("click", () => { camYawDeg = 0; camPitchDeg = 0; });
+document.getElementById("btnSide").addEventListener("click", () => { camYawDeg = 90; camPitchDeg = 0; });
+document.getElementById("btnTop").addEventListener("click", () => { camYawDeg = 0; camPitchDeg = parseFloat(rngPitchMax.value); });
+document.getElementById("btnOrbit").addEventListener("click", (e) => {
+  autoOrbit = !autoOrbit;
+  e.currentTarget.classList.toggle("active", autoOrbit);
+});
+
+reloadBtn.addEventListener("click", () => loadPreset(activePreset, null, true));
+
+function loadCustomFile(file) {
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    const customPreset = {
+      id: "custom",
+      label: `Custom — ${file.name}`,
+      pack: `Local file (${file.name})`,
+      path: file.name,
+      cols: parseInt(colsInput.value, 10) || 32,
+      rows: parseInt(rowsInput.value, 10) || 19,
+      pitchMin: parseFloat(rngPitchMin.value),
+      pitchMax: parseFloat(rngPitchMax.value),
+    };
+    loadPreset(customPreset, ev.target.result);
+  };
+  reader.readAsDataURL(file);
+}
+
+uploadBtn.addEventListener("click", () => fileInput.click());
+fileInput.addEventListener("change", (e) => {
+  if (e.target.files[0]) loadCustomFile(e.target.files[0]);
+});
+viewportWrap.addEventListener("dragover", (e) => { e.preventDefault(); dropOverlay.classList.add("active"); });
+viewportWrap.addEventListener("dragleave", () => dropOverlay.classList.remove("active"));
+viewportWrap.addEventListener("drop", (e) => {
+  e.preventDefault();
+  dropOverlay.classList.remove("active");
+  if (e.dataTransfer.files[0]) loadCustomFile(e.dataTransfer.files[0]);
+});
+
+let dragging = false;
+let lastX = 0, lastY = 0;
+glCanvas.addEventListener("pointerdown", (e) => {
+  dragging = true;
+  lastX = e.clientX;
+  lastY = e.clientY;
+  glCanvas.setPointerCapture(e.pointerId);
+});
+glCanvas.addEventListener("pointermove", (e) => {
+  if (!dragging) return;
+  const dx = e.clientX - lastX;
+  const dy = e.clientY - lastY;
+  lastX = e.clientX;
+  lastY = e.clientY;
+  camYawDeg -= dx * 0.45;
+  camPitchDeg = clamp(camPitchDeg + dy * 0.38, -85, 85);
+});
+glCanvas.addEventListener("pointerup", (e) => {
+  dragging = false;
+  try { glCanvas.releasePointerCapture(e.pointerId); } catch {}
+});
+glCanvas.addEventListener("dblclick", () => {
+  camYawDeg = 0; camPitchDeg = 15;
+});
+glCanvas.addEventListener("wheel", (e) => {
+  e.preventDefault();
+  camDist = clamp(camDist + e.deltaY * 0.0025, 1.4, 8.0);
+  rngDist.value = camDist.toFixed(2);
+  valDist.textContent = camDist.toFixed(2) + " b";
+}, { passive: false });
+
+atlasCanvas.addEventListener("click", (e) => {
+  const rect = atlasCanvas.getBoundingClientRect();
+  const nx = clamp((e.clientX - rect.left) / rect.width, 0, 0.9999);
+  const ny = clamp((e.clientY - rect.top) / rect.height, 0, 0.9999);
+  const cols = Math.max(1, parseInt(colsInput.value, 10) || 32);
+  const rows = Math.max(1, parseInt(rowsInput.value, 10) || 19);
+  const pitchMin = parseFloat(rngPitchMin.value);
+  const pitchMax = parseFloat(rngPitchMax.value);
+  const bodyRot = parseFloat(rngBodyRot.value);
+  const c = Math.floor(nx * cols);
+  const r = Math.floor(ny * rows);
+  const yawStep = 360 / cols;
+  const pitchStep = (pitchMax - pitchMin) / Math.max(1, rows - 1);
+  camYawDeg = c * yawStep - bodyRot;
+  camPitchDeg = pitchMax - r * pitchStep;
+});
+
+function drawAtlasMinimap() {
+  if (!activeImg || !chkAtlasMap.checked) return;
+  const cols = Math.max(1, parseInt(colsInput.value, 10) || 32);
+  const rows = Math.max(1, parseInt(rowsInput.value, 10) || 19);
+  const maxW = 330;
+  const aspect = (activeImg.naturalHeight || activeImg.height) / Math.max(1, (activeImg.naturalWidth || activeImg.width));
+  const w = maxW;
+  const h = Math.max(54, Math.min(190, Math.round(w * aspect)));
+  if (atlasCanvas.width !== w || atlasCanvas.height !== h) {
+    atlasCanvas.width = w;
+    atlasCanvas.height = h;
+  }
+  atlasCtx.clearRect(0, 0, w, h);
+  atlasCtx.drawImage(activeImg, 0, 0, w, h);
+
+  atlasCtx.strokeStyle = "rgba(255,255,255,0.22)";
+  atlasCtx.lineWidth = 1;
+  for (let c = 1; c < cols; c++) {
+    const x = Math.round((c / cols) * w) + 0.5;
+    atlasCtx.beginPath(); atlasCtx.moveTo(x, 0); atlasCtx.lineTo(x, h); atlasCtx.stroke();
+  }
+  for (let r = 1; r < rows; r++) {
+    const y = Math.round((r / rows) * h) + 0.5;
+    atlasCtx.beginPath(); atlasCtx.moveTo(0, y); atlasCtx.lineTo(w, y); atlasCtx.stroke();
+  }
+
+  if (lastMolang) {
+    const cw = w / cols;
+    const ch = h / rows;
+    const rx = lastMolang.col * cw;
+    const ry = lastMolang.row * ch;
+    atlasCtx.fillStyle = "rgba(56, 189, 248, 0.20)";
+    atlasCtx.fillRect(rx, ry, cw, ch);
+    atlasCtx.strokeStyle = "#38bdf8";
+    atlasCtx.lineWidth = 2;
+    atlasCtx.strokeRect(rx + 1, ry + 1, Math.max(2, cw - 2), Math.max(2, ch - 2));
+  }
+}
+
+// ============================================================================
+// 7. MAIN RENDER LOOP
+// ============================================================================
+function updateBackgroundStyle() {
+  const v = bgSelect.value;
+  if (v === "minecraft") {
+    viewportWrap.style.background = "linear-gradient(180deg, #6298f5 0%, #a5c9ff 65%, #84b47c 100%)";
+  } else if (v === "neutral") {
+    viewportWrap.style.background = "#2b303a";
+  } else if (v === "checker") {
+    viewportWrap.style.background = "repeating-conic-gradient(#262c36 0% 25%, #1c2028 0% 50%) 50% / 24px 24px";
+  } else {
+    viewportWrap.style.background = "radial-gradient(circle at 50% 42%, #192130 0%, #0f1218 75%)";
+  }
+  gl.clearColor(0, 0, 0, 0);
+}
+bgSelect.addEventListener("change", updateBackgroundStyle);
+updateBackgroundStyle();
+
+let prevCol = -1, prevRow = -1, lastCssBgSrc = "";
+
+function frame() {
+  if (autoOrbit && !dragging) camYawDeg += 0.35;
+
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const cssW = glCanvas.clientWidth;
+  const cssH = glCanvas.clientHeight;
+  const w = Math.floor(cssW * dpr);
+  const h = Math.floor(cssH * dpr);
+  if (glCanvas.width !== w || glCanvas.height !== h) {
+    glCanvas.width = w;
+    glCanvas.height = h;
+  }
+  gl.viewport(0, 0, w, h);
+  gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+  gl.enable(gl.DEPTH_TEST);
+  gl.disable(gl.CULL_FACE);
+
+  const pivot = [0, 0.75, 0];
+  const yawRad = camYawDeg * DEG2RAD;
+  const pitchRad = camPitchDeg * DEG2RAD;
+  const eye = [
+    pivot[0] + camDist * Math.sin(yawRad) * Math.cos(pitchRad),
+    pivot[1] + camDist * Math.sin(pitchRad),
+    pivot[2] + camDist * Math.cos(yawRad) * Math.cos(pitchRad),
+  ];
+  const proj = mat4Perspective(45 * DEG2RAD, w / Math.max(1, h), 0.1, 50.0);
+  const view = mat4LookAt(eye, pivot, [0, 1, 0]);
+  const vp = mat4Multiply(proj, view);
+
+  const cfg = {
+    cols: parseInt(colsInput.value, 10) || 32,
+    rows: parseInt(rowsInput.value, 10) || 19,
+    pitchMin: parseFloat(rngPitchMin.value),
+    pitchMax: parseFloat(rngPitchMax.value),
+    bodyYRotation: parseFloat(rngBodyRot.value),
+    mode: modeSelect.value,
+  };
+  const m = evaluateImposterMolang(camYawDeg, camPitchDeg, cfg);
+  lastMolang = m;
+
+  // 1. Grounding: Pedestal + Floor Grid
+  if (chkPedestal.checked) {
+    gl.disable(gl.BLEND);
+    drawSolidBuffer(pedestalVBO, pedestalVerts.length / 10, gl.TRIANGLES, vp, 1.0);
+    gl.enable(gl.BLEND);
+    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+    gl.depthMask(false);
+    drawSolidBuffer(floorVBO, floorVerts.length / 10, gl.TRIANGLES, vp, 0.0);
+    drawSolidBuffer(gridVBO, gridVertCount, gl.LINES, vp, 0.0);
+    gl.depthMask(true);
+  }
+
+  // 2. Grounding: Compass Ring + Axes + Active Yaw Bin Wedge
+  const labelNodes = [];
+  if (chkAxesRing.checked) {
+    const lines = [];
+    const ringR = 1.15;
+    const segs = 96;
+    for (let i = 0; i < segs; i++) {
+      const a0 = (i / segs) * Math.PI * 2;
+      const a1 = ((i + 1) / segs) * Math.PI * 2;
+      const c = [0.35, 0.44, 0.56, 0.7];
+      lines.push(
+        Math.sin(a0) * ringR, 0.006, Math.cos(a0) * ringR, 0,1,0, ...c,
+        Math.sin(a1) * ringR, 0.006, Math.cos(a1) * ringR, 0,1,0, ...c
+      );
+    }
+    const bodyOffRad = -cfg.bodyYRotation * DEG2RAD;
+    for (let cIdx = 0; cIdx < m.cols; cIdx++) {
+      const binEdgeDeg = (cIdx - 0.5) * m.yawStep;
+      const a = binEdgeDeg * DEG2RAD + bodyOffRad;
+      const rIn = ringR - 0.06, rOut = ringR + 0.06;
+      const tc = [0.55, 0.65, 0.78, 0.8];
+      lines.push(
+        Math.sin(a) * rIn, 0.008, Math.cos(a) * rIn, 0,1,0, ...tc,
+        Math.sin(a) * rOut, 0.008, Math.cos(a) * rOut, 0,1,0, ...tc
+      );
+    }
+    const activeStart = (m.col - 0.5) * m.yawStep * DEG2RAD + bodyOffRad;
+    const activeEnd = (m.col + 0.5) * m.yawStep * DEG2RAD + bodyOffRad;
+    const arcSteps = 12;
+    const ac = [0.22, 0.74, 0.97, 1.0];
+    for (let s = 0; s < arcSteps; s++) {
+      const a0 = activeStart + (s / arcSteps) * (activeEnd - activeStart);
+      const a1 = activeStart + ((s + 1) / arcSteps) * (activeEnd - activeStart);
+      lines.push(
+        Math.sin(a0) * (ringR + 0.02), 0.012, Math.cos(a0) * (ringR + 0.02), 0,1,0, ...ac,
+        Math.sin(a1) * (ringR + 0.02), 0.012, Math.cos(a1) * (ringR + 0.02), 0,1,0, ...ac
+      );
+    }
+    lines.push(
+      0, 0.01, 0, 0,1,0, 0.97, 0.35, 0.35, 1.0,  0.65, 0.01, 0, 0,1,0, 0.97, 0.35, 0.35, 1.0,
+      0, 0.01, 0, 0,1,0, 0.30, 0.87, 0.50, 1.0,  0, 0.65, 0, 0,1,0, 0.30, 0.87, 0.50, 1.0,
+      0, 0.01, 0, 0,1,0, 0.38, 0.65, 0.98, 1.0,  0, 0.01, 0.65, 0,1,0, 0.38, 0.65, 0.98, 1.0
+    );
+
+    gl.bindBuffer(gl.ARRAY_BUFFER, dynLineVBO);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(lines), gl.STATIC_DRAW);
+    gl.enable(gl.BLEND);
+    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+    drawSolidBuffer(dynLineVBO, lines.length / 10, gl.LINES, vp, 0.0);
+
+    const cardinals = [
+      { pos: [0, 0.05, 1.35], text: "S (+Z · 0°)", cls: "south" },
+      { pos: [1.35, 0.05, 0], text: "E (+X · 90°)", cls: "" },
+      { pos: [0, 0.05, -1.35], text: "N (-Z · 180°)", cls: "" },
+      { pos: [-1.35, 0.05, 0], text: "W (-X · 270°)", cls: "" },
+      { pos: [0.72, 0.04, 0], text: "+X", cls: "axis-x" },
+      { pos: [0, 0.72, 0], text: "+Y", cls: "axis-y" },
+      { pos: [0, 0.04, 0.72], text: "+Z", cls: "axis-z" },
+    ];
+    for (const c of cardinals) {
+      const sp = projectPoint(vp, c.pos);
+      if (sp && sp[0] >= 0 && sp[0] <= 1 && sp[1] >= 0 && sp[1] <= 1) {
+        labelNodes.push(`<div class="world-label ${c.cls}" style="left:${(sp[0]*100).toFixed(2)}%;top:${(sp[1]*100).toFixed(2)}%">${c.text}</div>`);
+      }
+    }
+  }
+  labelsLayer.innerHTML = labelNodes.join("");
+
+  // 3. Imposter Quad Transform
+  const model = mat4Multiply(
+    mat4Translate(0, 0.75, 0),
+    mat4Multiply(mat4RotateY(m.quadYawDeg * DEG2RAD), mat4RotateX(m.quadPitchDeg * DEG2RAD))
+  );
+  const quadMVP = mat4Multiply(vp, model);
+
+  if (chkDebugQuad.checked) {
+    const qLines = [];
+    const wc = [0.98, 0.75, 0.14, 0.95];
+    const corners = [[-0.75, 0.75, 0], [0.75, 0.75, 0], [0.75, -0.75, 0], [-0.75, -0.75, 0]];
+    const xf = (p) => [
+      model[0]*p[0] + model[4]*p[1] + model[8]*p[2] + model[12],
+      model[1]*p[0] + model[5]*p[1] + model[9]*p[2] + model[13],
+      model[2]*p[0] + model[6]*p[1] + model[10]*p[2] + model[14],
+    ];
+    const wcPts = corners.map(xf);
+    for (let i = 0; i < 4; i++) {
+      const a = wcPts[i], b = wcPts[(i + 1) % 4];
+      qLines.push(...a, 0,1,0, ...wc, ...b, 0,1,0, ...wc);
+    }
+    const nEnd = xf([0, 0, 0.95]);
+    qLines.push(0, 0.75, 0, 0,1,0, 0.22, 0.74, 0.97, 1.0, ...nEnd, 0,1,0, 0.22, 0.74, 0.97, 1.0);
+    const cLen = Math.hypot(eye[0], eye[1] - 0.75, eye[2]) || 1;
+    const cEnd = [(eye[0]/cLen)*1.1, 0.75 + ((eye[1]-0.75)/cLen)*1.1, (eye[2]/cLen)*1.1];
+    qLines.push(0, 0.75, 0, 0,1,0, 0.98, 0.75, 0.14, 1.0, ...cEnd, 0,1,0, 0.98, 0.75, 0.14, 1.0);
+    gl.bindBuffer(gl.ARRAY_BUFFER, dynLineVBO);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(qLines), gl.STATIC_DRAW);
+    drawSolidBuffer(dynLineVBO, qLines.length / 10, gl.LINES, vp, 0.0);
+  }
+
+  // 4. Render Imposter Quad (WebGL on HTTP/HTTPS/Custom, or synchronized CSS 3D fallback on file://)
+  if (activeTexture) {
+    gl.useProgram(imposterProg);
+    gl.bindBuffer(gl.ARRAY_BUFFER, quadVBO);
+    const locPos = gl.getAttribLocation(imposterProg, "aPos");
+    const locUV = gl.getAttribLocation(imposterProg, "aUV");
+    gl.enableVertexAttribArray(locPos);
+    gl.vertexAttribPointer(locPos, 3, gl.FLOAT, false, 20, 0);
+    gl.enableVertexAttribArray(locUV);
+    gl.vertexAttribPointer(locUV, 2, gl.FLOAT, false, 20, 12);
+
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, activeTexture);
+    gl.uniform1i(gl.getUniformLocation(imposterProg, "uTex"), 0);
+    gl.uniformMatrix4fv(gl.getUniformLocation(imposterProg, "uMVP"), false, quadMVP);
+
+    const tileW = activeImg ? (activeImg.naturalWidth || activeImg.width) / m.cols : 256;
+    const tileH = activeImg ? (activeImg.naturalHeight || activeImg.height) / m.rows : 256;
+    const padX = chkEdgeClamp.checked ? 0.5 / tileW : 0.0;
+    const padY = chkEdgeClamp.checked ? 0.5 / tileH : 0.0;
+
+    gl.uniform2f(gl.getUniformLocation(imposterProg, "uTexelPad"), padX, padY);
+    gl.uniform2f(gl.getUniformLocation(imposterProg, "uScale"), m.uvScale[0], m.uvScale[1]);
+    gl.uniform1f(gl.getUniformLocation(imposterProg, "uFlipU"), chkFlipU.checked ? 1.0 : 0.0);
+
+    if (cfg.mode === "crossfade") {
+      const cf = m.crossfade;
+      gl.uniform1f(gl.getUniformLocation(imposterProg, "uCrossfade"), 1.0);
+      gl.uniform2f(gl.getUniformLocation(imposterProg, "uOffset0"), cf.col0 / m.cols, cf.row0 / m.rows);
+      gl.uniform2f(gl.getUniformLocation(imposterProg, "uOffset1"), cf.col1 / m.cols, cf.row0 / m.rows);
+      gl.uniform2f(gl.getUniformLocation(imposterProg, "uOffset2"), cf.col0 / m.cols, cf.row1 / m.rows);
+      gl.uniform2f(gl.getUniformLocation(imposterProg, "uOffset3"), cf.col1 / m.cols, cf.row1 / m.rows);
+      gl.uniform1f(gl.getUniformLocation(imposterProg, "uTx"), cf.colBlend);
+      gl.uniform1f(gl.getUniformLocation(imposterProg, "uTy"), cf.rowBlend);
+    } else {
+      gl.uniform1f(gl.getUniformLocation(imposterProg, "uCrossfade"), 0.0);
+      gl.uniform2f(gl.getUniformLocation(imposterProg, "uOffset0"), m.uvOffset[0], m.uvOffset[1]);
+      gl.uniform2f(gl.getUniformLocation(imposterProg, "uOffset1"), 0, 0);
+      gl.uniform2f(gl.getUniformLocation(imposterProg, "uOffset2"), 0, 0);
+      gl.uniform2f(gl.getUniformLocation(imposterProg, "uOffset3"), 0, 0);
+      gl.uniform1f(gl.getUniformLocation(imposterProg, "uTx"), 0);
+      gl.uniform1f(gl.getUniformLocation(imposterProg, "uTy"), 0);
+    }
+
+    if (matSelect.value === "test") {
+      gl.disable(gl.BLEND);
+      gl.uniform1f(gl.getUniformLocation(imposterProg, "uAlphaCutoff"), 0.5);
+    } else {
+      gl.enable(gl.BLEND);
+      gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+      gl.uniform1f(gl.getUniformLocation(imposterProg, "uAlphaCutoff"), 0.01);
+    }
+    gl.drawArrays(gl.TRIANGLES, 0, 6);
+  } else if (css3dFallback && activeSrcUrl) {
+    const pxPerBlock = 100;
+    const quadPx = 150;
+    const perspPx = (cssH * 0.5) / Math.tan(22.5 * DEG2RAD);
+    css3dStage.style.perspective = `${perspPx.toFixed(2)}px`;
+    css3dWorld.style.transform =
+      `translate3d(0, 0, ${(perspPx - camDist * pxPerBlock).toFixed(2)}px) ` +
+      `rotateX(${(-camPitchDeg).toFixed(3)}deg) rotateY(${(-camYawDeg).toFixed(3)}deg)`;
+    css3dQuad.style.transform =
+      `rotateY(${(m.quadYawDeg).toFixed(3)}deg) rotateX(${(-m.quadPitchDeg).toFixed(3)}deg)`;
+    if (lastCssBgSrc !== activeSrcUrl) {
+      lastCssBgSrc = activeSrcUrl;
+      css3dTile.style.backgroundImage = `url("${activeSrcUrl}")`;
+    }
+    css3dTile.style.backgroundSize = `${m.cols * quadPx}px ${m.rows * quadPx}px`;
+    css3dTile.style.backgroundPosition = `-${m.col * quadPx}px -${m.row * quadPx}px`;
+    css3dTile.style.imageRendering = filterSelect.value === "nearest" ? "pixelated" : "auto";
+    css3dTile.style.transform = chkFlipU.checked ? "scaleX(-1)" : "none";
+  }
+
+  // 5. Update HUD & Live Molang Inspector
+  hudCellBadge.textContent = `col ${m.col} / ${m.cols} · row ${m.row} / ${m.rows}`;
+  if (m.col !== prevCol || m.row !== prevRow) {
+    prevCol = m.col;
+    prevRow = m.row;
+    drawAtlasMinimap();
+  }
+
+  molangBox.innerHTML = [
+    ["query.rotation_to_camera(1)", m.rotToCam1.toFixed(1) + "°"],
+    ["query.rotation_to_camera(0)", m.rotToCam0.toFixed(1) + "°"],
+    ["v.rel_cam_yaw", m.relCamYaw.toFixed(1) + "°"],
+    ["v.raw_yaw / v.norm_yaw", `${m.rawYaw.toFixed(1)}° / ${m.normYaw.toFixed(1)}°`],
+    ["v.col / v.cols", `${m.col} / ${m.cols}`, true],
+    ["v.snapped_yaw", m.snappedYaw.toFixed(2) + "°"],
+    ["v.raw_pitch", m.rawPitch.toFixed(1) + "°"],
+    ["v.row / v.rows", `${m.row} / ${m.rows}`, true],
+    ["v.snapped_pitch", m.snappedPitch.toFixed(2) + "°"],
+    ["uv_anim.offset", `[${m.uvOffset[0].toFixed(4)}, ${m.uvOffset[1].toFixed(4)}]`],
+    ["uv_anim.scale", `[${m.uvScale[0].toFixed(4)}, ${m.uvScale[1].toFixed(4)}]`],
+  ].map(([k, v, hi]) => `<span class="molang-k">${k}</span><span class="molang-v${hi ? " hi" : ""}">${v}</span>`).join("");
+
+  requestAnimationFrame(frame);
+}
+
+loadPreset(PRESETS[0]);
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

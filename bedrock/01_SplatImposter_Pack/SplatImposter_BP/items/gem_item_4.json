@@ -13,7 +13,7 @@
         "texture": "gem_4"
       },
       "minecraft:display_name": {
-        "value": "\u2726 Amethyst Geode [Medium: 16x5 = 80 Angles]"
+        "value": "\u2726 Amethyst Geode [Medium: 32x19 = 608 Angles, 256px]"
       }
     }
   }
