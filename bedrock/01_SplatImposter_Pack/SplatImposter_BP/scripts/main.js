@@ -1,10 +1,14 @@
 import { world, system, ItemStack } from "@minecraft/server";
+import { ActionFormData, FormCancelationReason } from "@minecraft/server-ui";
 
 const PACK_TITLE = "01_Imposter_Pack (Spherical Imposter)";
 const PACK_SUBTITLE = "Angle-Pinned 3DGS Imposter (Low 12x3, Med 16x5, High 24x7)";
 const CMD_PREFIX = "imposter";
 const ENTITY_ID = "custom:imposter";
 const ITEM_PREFIX = "custom:gem_item_";
+const ICON_PREFIX = "textures/items/gem_";
+const MENU_ITEM_ID = "custom:imposter_menu";
+const CATALOG_NAME = "Imposter Gem Catalog";
 const GEM_NAMES = ["Citrine Cluster [Low: 12x3 = 36 Angles]", "Citrine Cluster [Medium: 16x5 = 80 Angles]", "Citrine Cluster [High: 24x7 = 168 Angles]", "Amethyst Geode [Low: 12x3 = 36 Angles]", "Amethyst Geode [Medium: 16x5 = 80 Angles]", "Amethyst Geode [High: 24x7 = 168 Angles]"];
 const SLUG_MAP = {"low_citrine": 0, "med_citrine": 1, "high_citrine": 2, "low_amethyst": 3, "med_amethyst": 4, "high_amethyst": 5, "0": 0, "1": 1, "2": 2, "3": 3, "4": 4, "5": 5};
 
@@ -19,41 +23,152 @@ function canInteract(player) {
 	return true;
 }
 
-export function printPackHelp(player) {
-	player.sendMessage("§8====================================================");
-	player.sendMessage(`§b§l[${PACK_TITLE}] §r§7- ${PACK_SUBTITLE}`);
-	player.sendMessage("§fSpawn one gem at a time in front of you:");
-	for (let i = 0; i < GEM_NAMES.length; i++) {
-		player.sendMessage(`  §a/scriptevent ${CMD_PREFIX}:spawn ${i} §7-> §f${GEM_NAMES[i]}`);
-	}
-	player.sendMessage(`  §e/scriptevent ${CMD_PREFIX}:items §7- Give all 6 Gem items to your inventory`);
-	player.sendMessage(`  §e/scriptevent ${CMD_PREFIX}:clear §7- Remove spawned gems`);
-	player.sendMessage(`  §e/scriptevent ${CMD_PREFIX}:help  §7- Show this command list again`);
-	player.sendMessage("§dControls: §fCrouch + Interact §7to Pick Up | §fInteract on Block §7to Place");
-	player.sendMessage("§8====================================================");
+function createGemItem(variant) {
+	const st = new ItemStack(`${ITEM_PREFIX}${variant}`, 1);
+	st.nameTag = `§r§d✦ ${GEM_NAMES[variant]}`;
+	st.setLore([
+		`§7${PACK_TITLE}`,
+		"§eInteract on any block to place",
+		"§8Crouch + Interact to pick up"
+	]);
+	return st;
 }
 
-// Print startup banner when player spawns in the world (or after /reload)
+function addOrDropItem(player, itemStack, dropLocation = player.location) {
+	const inv = player.getComponent("minecraft:inventory")?.container;
+	if (inv) {
+		const leftover = inv.addItem(itemStack);
+		if (leftover) {
+			player.dimension.spawnItem(leftover, dropLocation);
+		}
+	} else {
+		player.dimension.spawnItem(itemStack, dropLocation);
+	}
+}
+
+function hasItem(container, typeId) {
+	for (let i = 0; i < container.size; i++) {
+		const item = container.getItem(i);
+		if (item && item.typeId === typeId) return true;
+	}
+	return false;
+}
+
+function ensureCatalogItem(player) {
+	const inv = player.getComponent("minecraft:inventory")?.container;
+	if (!inv || hasItem(inv, MENU_ITEM_ID)) return false;
+	const menuStack = new ItemStack(MENU_ITEM_ID, 1);
+	menuStack.nameTag = `§r§b✦ ${CATALOG_NAME}`;
+	menuStack.setLore([
+		`§7${PACK_TITLE}`,
+		"§eRight-Click / Use to open Gem Menu"
+	]);
+	inv.addItem(menuStack);
+	return true;
+}
+
+function giveGemItem(player, variant) {
+	addOrDropItem(player, createGemItem(variant));
+	player.dimension.playSound("random.pop", player.location, { volume: 0.9, pitch: 1.25 });
+	player.onScreenDisplay.setActionBar(`§aAdded §f${GEM_NAMES[variant]} §ato inventory`);
+}
+
+function giveAllGems(player) {
+	for (let i = 0; i < GEM_NAMES.length; i++) {
+		addOrDropItem(player, createGemItem(i));
+	}
+	player.dimension.playSound("random.levelup", player.location, { volume: 0.6, pitch: 1.4 });
+	player.onScreenDisplay.setActionBar(`§aAdded all ${GEM_NAMES.length} gems to inventory!`);
+}
+
+function clearSpawnedGems(player) {
+	const ents = player.dimension.getEntities({ type: ENTITY_ID });
+	for (const e of ents) e.remove();
+	player.dimension.playSound("random.fizz", player.location, { volume: 0.5, pitch: 1.2 });
+	player.onScreenDisplay.setActionBar(`§eCleared ${ents.length} placed gem(s).`);
+}
+
+async function showFormWhenReady(player, form, attempts = 15) {
+	for (let i = 0; i < attempts; i++) {
+		if (!player.isValid()) return null;
+		const res = await form.show(player);
+		if (!res.canceled || res.cancelationReason !== FormCancelationReason.UserBusy) {
+			return res;
+		}
+		await system.waitTicks(4);
+	}
+	return null;
+}
+
+export async function openGemMenu(player) {
+	const form = new ActionFormData()
+		.title(`✦ ${CATALOG_NAME}`)
+		.body("§7Select a gem to add to your inventory.\n§8Place: Interact block | Pick up: Crouch + Interact");
+
+	form.button(`§a✦ Give All ${GEM_NAMES.length} Gems`, `${ICON_PREFIX}1`);
+	for (let i = 0; i < GEM_NAMES.length; i++) {
+		form.button(GEM_NAMES[i], `${ICON_PREFIX}${i}`);
+	}
+	form.button("§c✕ Clear Placed Gems");
+
+	const res = await showFormWhenReady(player, form);
+	if (!res || res.canceled || res.selection === undefined) return;
+
+	const sel = res.selection;
+	if (sel === 0) {
+		giveAllGems(player);
+	} else if (sel >= 1 && sel <= GEM_NAMES.length) {
+		giveGemItem(player, sel - 1);
+	} else if (sel === GEM_NAMES.length + 1) {
+		clearSpawnedGems(player);
+	}
+}
+
+export function initPlayer(player) {
+	ensureCatalogItem(player);
+	player.sendMessage(
+		`§b✦ [${PACK_TITLE}] §7Right-click §e${CATALOG_NAME} §7(or §f/scriptevent ${CMD_PREFIX}:menu§7) to pick gems. §8(/scriptevent ${CMD_PREFIX}:help)`
+	);
+}
+
+export function printPackHelp(player) {
+	player.sendMessage(`§b§l[${PACK_TITLE}] §r§7- ${PACK_SUBTITLE}`);
+	player.sendMessage(`  §e/scriptevent ${CMD_PREFIX}:menu §7- Open Gem Picker UI | §e:items §7- Give all 6`);
+	player.sendMessage(`  §a/scriptevent ${CMD_PREFIX}:spawn <0-${GEM_NAMES.length - 1}> §7- Spawn in front | §e:clear §7- Clear`);
+	player.sendMessage("§dControls: §fInteract Block §7to Place | §fCrouch + Interact §7to Pick Up");
+}
+
+// Compact startup notice + Catalog item when player spawns (or after /reload)
 world.afterEvents.playerSpawn.subscribe((event) => {
 	const player = event.player;
 	if (!player || greetedPlayers.has(player.id)) return;
 	greetedPlayers.add(player.id);
 	system.runTimeout(() => {
 		if (player.isValid()) {
-			printPackHelp(player);
+			initPlayer(player);
 		}
 	}, 40);
 });
 
-// Fallback for /reload when player is already spawned in the world
 system.runTimeout(() => {
 	for (const player of world.getAllPlayers()) {
 		if (!greetedPlayers.has(player.id)) {
 			greetedPlayers.add(player.id);
-			printPackHelp(player);
+			initPlayer(player);
 		}
 	}
 }, 60);
+
+// 0. CATALOG MENU TRIGGER: Right-Click / Use Catalog item in air
+world.beforeEvents.itemUse.subscribe((event) => {
+	const { source: player, itemStack } = event;
+	if (!itemStack || itemStack.typeId !== MENU_ITEM_ID) return;
+	event.cancel = true;
+	if (!canInteract(player)) return;
+	system.run(() => {
+		openGemMenu(player);
+	});
+});
 
 // 1. PICKUP MECHANIC: Crouch + Interact (Sneak + Right-Click/Tap) on a Gem Entity
 world.beforeEvents.playerInteractWithEntity.subscribe((event) => {
@@ -76,7 +191,6 @@ world.beforeEvents.playerInteractWithEntity.subscribe((event) => {
 
 	const variant = target.getComponent("minecraft:variant")?.value ?? 0;
 	const clampedVariant = Math.max(0, Math.min(GEM_NAMES.length - 1, variant));
-	const itemId = `${ITEM_PREFIX}${clampedVariant}`;
 	const gemName = GEM_NAMES[clampedVariant];
 	const loc = target.location;
 	const dim = target.dimension;
@@ -84,34 +198,27 @@ world.beforeEvents.playerInteractWithEntity.subscribe((event) => {
 	system.run(() => {
 		if (!target.isValid()) return;
 		target.remove();
-
-		const itemStack = new ItemStack(itemId, 1);
-		itemStack.nameTag = `§r§d✦ ${gemName}`;
-		itemStack.setLore([
-			`§7${PACK_TITLE}`,
-			"§eInteract on any block to place",
-			"§8Crouch + Interact to pick up"
-		]);
-
-		const inv = player.getComponent("minecraft:inventory")?.container;
-		if (inv) {
-			const leftover = inv.addItem(itemStack);
-			if (leftover) {
-				dim.spawnItem(leftover, loc);
-			}
-		} else {
-			dim.spawnItem(itemStack, loc);
-		}
-
+		addOrDropItem(player, createGemItem(clampedVariant), loc);
 		dim.playSound("random.pop", loc, { volume: 0.9, pitch: 1.25 });
 		player.onScreenDisplay.setActionBar(`§aPicked up §f${gemName}`);
 	});
 });
 
-// 2. PLACEMENT MECHANIC: Interact on any Block while holding a Gem Item
+// 2. PLACEMENT & CATALOG BLOCK-CLICK: Interact on any Block while holding Catalog or Gem Item
 world.beforeEvents.playerInteractWithBlock.subscribe((event) => {
 	const { player, itemStack, block, blockFace } = event;
-	if (!itemStack || !itemStack.typeId.startsWith(ITEM_PREFIX)) return;
+	if (!itemStack) return;
+
+	if (itemStack.typeId === MENU_ITEM_ID) {
+		event.cancel = true;
+		if (!canInteract(player)) return;
+		system.run(() => {
+			openGemMenu(player);
+		});
+		return;
+	}
+
+	if (!itemStack.typeId.startsWith(ITEM_PREFIX)) return;
 
 	const suffix = itemStack.typeId.slice(ITEM_PREFIX.length);
 	const variant = parseInt(suffix, 10);
@@ -163,7 +270,7 @@ world.beforeEvents.playerInteractWithBlock.subscribe((event) => {
 	});
 });
 
-// 3. COMMAND HANDLER: `/scriptevent <prefix>:spawn <0..5>`, `:items`, `:clear`, `:help`
+// 3. COMMAND HANDLER: `/scriptevent <prefix>:menu`, `:spawn <0..5>`, `:items`, `:clear`, `:help`
 system.afterEvents.scriptEventReceive.subscribe((event) => {
 	const id = event.id.toLowerCase();
 	const player = event.sourceEntity;
@@ -171,33 +278,32 @@ system.afterEvents.scriptEventReceive.subscribe((event) => {
 
 	const msg = (event.message ?? "").trim().toLowerCase();
 
+	if (id === `${CMD_PREFIX}:menu` || id === "gem:menu") {
+		openGemMenu(player);
+		return;
+	}
+
+	if (id === `${CMD_PREFIX}:catalog` || id === "gem:catalog") {
+		if (ensureCatalogItem(player)) {
+			player.onScreenDisplay.setActionBar(`§bAdded §f${CATALOG_NAME} §bto inventory`);
+		} else {
+			openGemMenu(player);
+		}
+		return;
+	}
+
 	if (id === `${CMD_PREFIX}:help` || id === "gem:help") {
 		printPackHelp(player);
 		return;
 	}
 
 	if (id === `${CMD_PREFIX}:items` || id === "gem:items") {
-		const inv = player.getComponent("minecraft:inventory")?.container;
-		if (!inv) return;
-		for (let i = 0; i < GEM_NAMES.length; i++) {
-			const st = new ItemStack(`${ITEM_PREFIX}${i}`, 1);
-			st.nameTag = `§r§d✦ ${GEM_NAMES[i]}`;
-			st.setLore([
-				`§7${PACK_TITLE}`,
-				"§eInteract on any block to place",
-				"§8Crouch + Interact to pick up"
-			]);
-			inv.addItem(st);
-		}
-		player.sendMessage(`§a[${PACK_TITLE}] Added all ${GEM_NAMES.length} Gem items to your inventory!`);
+		giveAllGems(player);
 		return;
 	}
 
 	if (id === `${CMD_PREFIX}:clear` || id === "gem:clear") {
-		const dim = player.dimension;
-		const ents = dim.getEntities({ type: ENTITY_ID });
-		for (const e of ents) e.remove();
-		player.sendMessage(`§e[${PACK_TITLE}] Cleared ${ents.length} spawned gem entities.`);
+		clearSpawnedGems(player);
 		return;
 	}
 
@@ -232,8 +338,6 @@ system.afterEvents.scriptEventReceive.subscribe((event) => {
 		ent.nameTag = GEM_NAMES[variant];
 
 		dim.playSound("block.amethyst_block.chime", spawnPos, { volume: 1.0, pitch: 1.1 });
-		player.sendMessage(
-			`§a[${PACK_TITLE}] Spawned §f${GEM_NAMES[variant]}§a! (§eCrouch + Interact§a to pick up, §eInteract§a on block to place)`
-		);
+		player.onScreenDisplay.setActionBar(`§aSpawned §f${GEM_NAMES[variant]}`);
 	}
 });

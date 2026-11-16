@@ -1,0 +1,25 @@
+{
+  "format_version": "1.20.50",
+  "minecraft:item": {
+    "description": {
+      "identifier": "custom:polymesh_menu",
+      "menu_category": {
+        "category": "items"
+      }
+    },
+    "components": {
+      "minecraft:max_stack_size": 1,
+      "minecraft:glint": true,
+      "minecraft:cooldown": {
+        "category": "polymesh_menu",
+        "duration": 0.25
+      },
+      "minecraft:icon": {
+        "texture": "poly_gem_1"
+      },
+      "minecraft:display_name": {
+        "value": "\u2726 PolyMesh Gem Catalog"
+      }
+    }
+  }
+}

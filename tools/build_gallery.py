@@ -30,6 +30,32 @@ def write_json(path: Path, data: dict) -> None:
     path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
 
 
+def write_catalog_item_json(bp_dir: Path, slug: str, icon_texture: str, display_name: str) -> None:
+    """Write the clickable Gem Catalog item definition that opens the native Bedrock UI menu."""
+    write_json(
+        bp_dir / "items" / f"{slug}.json",
+        {
+            "format_version": "1.20.50",
+            "minecraft:item": {
+                "description": {
+                    "identifier": f"custom:{slug}",
+                    "menu_category": {"category": "items"},
+                },
+                "components": {
+                    "minecraft:max_stack_size": 1,
+                    "minecraft:glint": True,
+                    "minecraft:cooldown": {
+                        "category": slug,
+                        "duration": 0.25,
+                    },
+                    "minecraft:icon": {"texture": icon_texture},
+                    "minecraft:display_name": {"value": f"✦ {display_name}"},
+                },
+            },
+        },
+    )
+
+
 def write_install_cmd(pack_dir: Path, bp_name: str, rp_name: str, title: str) -> None:
     content = f"""@echo off
 setlocal
@@ -75,12 +101,16 @@ def generate_pack_script_js(
     cmd_prefix: str,
     entity_id: str,
     item_prefix: str,
+    icon_prefix: str,
+    menu_item_id: str,
+    catalog_name: str,
     variants: list[dict],
     include_sample_runner: bool = False,
 ) -> str:
     """
-    Generate the Bedrock @minecraft/server script for any of the 3 packs:
-    - Startup/Init help message printed on world join & reload
+    Generate the Bedrock @minecraft/server + @minecraft/server-ui script for any of the 3 packs:
+    - Compact 1-line startup notice & automatic Gem Catalog item on world join / reload
+    - Native Bedrock ActionFormData button menu with gem icons (via Gem Catalog item or `:menu`)
     - Single-gem spawning via `/scriptevent <prefix>:spawn <0..5|slug>`
     - Item giving via `/scriptevent <prefix>:items`
     - Clearing via `/scriptevent <prefix>:clear`
@@ -99,18 +129,60 @@ def generate_pack_script_js(
         else ""
     )
     extra_help_line = (
-        f'	player.sendMessage("  §e/scriptevent sample:run §7- Stream 5,000 oriented splat particles at looked-at block");\n'
+        '	player.sendMessage("  §e/scriptevent sample:run §7- Stream 5,000 oriented splat particles at looked-at block");\n'
+        if include_sample_runner
+        else ""
+    )
+    sample_helper = (
+        """
+function toggleParticleStream(player) {
+	const hit = player.getBlockFromViewDirection();
+	let targetLoc;
+	if (hit?.block) {
+		const loc = hit.block.location;
+		targetLoc = { x: loc.x, y: loc.y + 1, z: loc.z, dimension: player.dimension };
+	} else {
+		const view = player.getViewDirection();
+		const horizLen = Math.hypot(view.x, view.z) || 1.0;
+		targetLoc = {
+			x: Math.floor(player.location.x + (view.x / horizLen) * 3.0),
+			y: Math.floor(player.location.y),
+			z: Math.floor(player.location.z + (view.z / horizLen) * 3.0),
+			dimension: player.dimension
+		};
+	}
+	scriptBox((msg) => {
+		player.onScreenDisplay.setActionBar(`§e${msg}`);
+	}, targetLoc);
+}
+"""
+        if include_sample_runner
+        else ""
+    )
+    sample_menu_btn = (
+        '	form.button("§e⚡ Toggle Particle Stream (5k Splats)");\n'
+        if include_sample_runner
+        else ""
+    )
+    sample_menu_case = (
+        """	} else if (sel === GEM_NAMES.length + 2) {
+		toggleParticleStream(player);
+"""
         if include_sample_runner
         else ""
     )
 
     return f"""{sample_imports}import {{ world, system, ItemStack }} from "@minecraft/server";
+import {{ ActionFormData, FormCancelationReason }} from "@minecraft/server-ui";
 
 const PACK_TITLE = {json.dumps(pack_title)};
 const PACK_SUBTITLE = {json.dumps(pack_subtitle)};
 const CMD_PREFIX = {json.dumps(cmd_prefix)};
 const ENTITY_ID = {json.dumps(entity_id)};
 const ITEM_PREFIX = {json.dumps(item_prefix)};
+const ICON_PREFIX = {json.dumps(icon_prefix)};
+const MENU_ITEM_ID = {json.dumps(menu_item_id)};
+const CATALOG_NAME = {json.dumps(catalog_name)};
 const GEM_NAMES = {json.dumps(gem_names)};
 const SLUG_MAP = {json.dumps(slug_map)};
 
@@ -125,41 +197,152 @@ function canInteract(player) {{
 	return true;
 }}
 
-export function printPackHelp(player) {{
-	player.sendMessage("§8====================================================");
-	player.sendMessage(`§b§l[${{PACK_TITLE}}] §r§7- ${{PACK_SUBTITLE}}`);
-	player.sendMessage("§fSpawn one gem at a time in front of you:");
-	for (let i = 0; i < GEM_NAMES.length; i++) {{
-		player.sendMessage(`  §a/scriptevent ${{CMD_PREFIX}}:spawn ${{i}} §7-> §f${{GEM_NAMES[i]}}`);
-	}}
-	player.sendMessage(`  §e/scriptevent ${{CMD_PREFIX}}:items §7- Give all 6 Gem items to your inventory`);
-	player.sendMessage(`  §e/scriptevent ${{CMD_PREFIX}}:clear §7- Remove spawned gems`);
-	player.sendMessage(`  §e/scriptevent ${{CMD_PREFIX}}:help  §7- Show this command list again`);
-{extra_help_line}	player.sendMessage("§dControls: §fCrouch + Interact §7to Pick Up | §fInteract on Block §7to Place");
-	player.sendMessage("§8====================================================");
+function createGemItem(variant) {{
+	const st = new ItemStack(`${{ITEM_PREFIX}}${{variant}}`, 1);
+	st.nameTag = `§r§d✦ ${{GEM_NAMES[variant]}}`;
+	st.setLore([
+		`§7${{PACK_TITLE}}`,
+		"§eInteract on any block to place",
+		"§8Crouch + Interact to pick up"
+	]);
+	return st;
 }}
 
-// Print startup banner when player spawns in the world (or after /reload)
+function addOrDropItem(player, itemStack, dropLocation = player.location) {{
+	const inv = player.getComponent("minecraft:inventory")?.container;
+	if (inv) {{
+		const leftover = inv.addItem(itemStack);
+		if (leftover) {{
+			player.dimension.spawnItem(leftover, dropLocation);
+		}}
+	}} else {{
+		player.dimension.spawnItem(itemStack, dropLocation);
+	}}
+}}
+
+function hasItem(container, typeId) {{
+	for (let i = 0; i < container.size; i++) {{
+		const item = container.getItem(i);
+		if (item && item.typeId === typeId) return true;
+	}}
+	return false;
+}}
+
+function ensureCatalogItem(player) {{
+	const inv = player.getComponent("minecraft:inventory")?.container;
+	if (!inv || hasItem(inv, MENU_ITEM_ID)) return false;
+	const menuStack = new ItemStack(MENU_ITEM_ID, 1);
+	menuStack.nameTag = `§r§b✦ ${{CATALOG_NAME}}`;
+	menuStack.setLore([
+		`§7${{PACK_TITLE}}`,
+		"§eRight-Click / Use to open Gem Menu"
+	]);
+	inv.addItem(menuStack);
+	return true;
+}}
+
+function giveGemItem(player, variant) {{
+	addOrDropItem(player, createGemItem(variant));
+	player.dimension.playSound("random.pop", player.location, {{ volume: 0.9, pitch: 1.25 }});
+	player.onScreenDisplay.setActionBar(`§aAdded §f${{GEM_NAMES[variant]}} §ato inventory`);
+}}
+
+function giveAllGems(player) {{
+	for (let i = 0; i < GEM_NAMES.length; i++) {{
+		addOrDropItem(player, createGemItem(i));
+	}}
+	player.dimension.playSound("random.levelup", player.location, {{ volume: 0.6, pitch: 1.4 }});
+	player.onScreenDisplay.setActionBar(`§aAdded all ${{GEM_NAMES.length}} gems to inventory!`);
+}}
+
+function clearSpawnedGems(player) {{
+	const ents = player.dimension.getEntities({{ type: ENTITY_ID }});
+	for (const e of ents) e.remove();
+	player.dimension.playSound("random.fizz", player.location, {{ volume: 0.5, pitch: 1.2 }});
+	player.onScreenDisplay.setActionBar(`§eCleared ${{ents.length}} placed gem(s).`);
+}}
+{sample_helper}
+async function showFormWhenReady(player, form, attempts = 15) {{
+	for (let i = 0; i < attempts; i++) {{
+		if (!player.isValid()) return null;
+		const res = await form.show(player);
+		if (!res.canceled || res.cancelationReason !== FormCancelationReason.UserBusy) {{
+			return res;
+		}}
+		await system.waitTicks(4);
+	}}
+	return null;
+}}
+
+export async function openGemMenu(player) {{
+	const form = new ActionFormData()
+		.title(`✦ ${{CATALOG_NAME}}`)
+		.body("§7Select a gem to add to your inventory.\\n§8Place: Interact block | Pick up: Crouch + Interact");
+
+	form.button(`§a✦ Give All ${{GEM_NAMES.length}} Gems`, `${{ICON_PREFIX}}1`);
+	for (let i = 0; i < GEM_NAMES.length; i++) {{
+		form.button(GEM_NAMES[i], `${{ICON_PREFIX}}${{i}}`);
+	}}
+	form.button("§c✕ Clear Placed Gems");
+{sample_menu_btn}
+	const res = await showFormWhenReady(player, form);
+	if (!res || res.canceled || res.selection === undefined) return;
+
+	const sel = res.selection;
+	if (sel === 0) {{
+		giveAllGems(player);
+	}} else if (sel >= 1 && sel <= GEM_NAMES.length) {{
+		giveGemItem(player, sel - 1);
+	}} else if (sel === GEM_NAMES.length + 1) {{
+		clearSpawnedGems(player);
+{sample_menu_case}	}}
+}}
+
+export function initPlayer(player) {{
+	ensureCatalogItem(player);
+	player.sendMessage(
+		`§b✦ [${{PACK_TITLE}}] §7Right-click §e${{CATALOG_NAME}} §7(or §f/scriptevent ${{CMD_PREFIX}}:menu§7) to pick gems. §8(/scriptevent ${{CMD_PREFIX}}:help)`
+	);
+}}
+
+export function printPackHelp(player) {{
+	player.sendMessage(`§b§l[${{PACK_TITLE}}] §r§7- ${{PACK_SUBTITLE}}`);
+	player.sendMessage(`  §e/scriptevent ${{CMD_PREFIX}}:menu §7- Open Gem Picker UI | §e:items §7- Give all 6`);
+	player.sendMessage(`  §a/scriptevent ${{CMD_PREFIX}}:spawn <0-${{GEM_NAMES.length - 1}}> §7- Spawn in front | §e:clear §7- Clear`);
+{extra_help_line}	player.sendMessage("§dControls: §fInteract Block §7to Place | §fCrouch + Interact §7to Pick Up");
+}}
+
+// Compact startup notice + Catalog item when player spawns (or after /reload)
 world.afterEvents.playerSpawn.subscribe((event) => {{
 	const player = event.player;
 	if (!player || greetedPlayers.has(player.id)) return;
 	greetedPlayers.add(player.id);
 	system.runTimeout(() => {{
 		if (player.isValid()) {{
-			printPackHelp(player);
+			initPlayer(player);
 		}}
 	}}, 40);
 }});
 
-// Fallback for /reload when player is already spawned in the world
 system.runTimeout(() => {{
 	for (const player of world.getAllPlayers()) {{
 		if (!greetedPlayers.has(player.id)) {{
 			greetedPlayers.add(player.id);
-			printPackHelp(player);
+			initPlayer(player);
 		}}
 	}}
 }}, 60);
+
+// 0. CATALOG MENU TRIGGER: Right-Click / Use Catalog item in air
+world.beforeEvents.itemUse.subscribe((event) => {{
+	const {{ source: player, itemStack }} = event;
+	if (!itemStack || itemStack.typeId !== MENU_ITEM_ID) return;
+	event.cancel = true;
+	if (!canInteract(player)) return;
+	system.run(() => {{
+		openGemMenu(player);
+	}});
+}});
 
 // 1. PICKUP MECHANIC: Crouch + Interact (Sneak + Right-Click/Tap) on a Gem Entity
 world.beforeEvents.playerInteractWithEntity.subscribe((event) => {{
@@ -182,7 +365,6 @@ world.beforeEvents.playerInteractWithEntity.subscribe((event) => {{
 
 	const variant = target.getComponent("minecraft:variant")?.value ?? 0;
 	const clampedVariant = Math.max(0, Math.min(GEM_NAMES.length - 1, variant));
-	const itemId = `${{ITEM_PREFIX}}${{clampedVariant}}`;
 	const gemName = GEM_NAMES[clampedVariant];
 	const loc = target.location;
 	const dim = target.dimension;
@@ -190,34 +372,27 @@ world.beforeEvents.playerInteractWithEntity.subscribe((event) => {{
 	system.run(() => {{
 		if (!target.isValid()) return;
 		target.remove();
-
-		const itemStack = new ItemStack(itemId, 1);
-		itemStack.nameTag = `§r§d✦ ${{gemName}}`;
-		itemStack.setLore([
-			`§7${{PACK_TITLE}}`,
-			"§eInteract on any block to place",
-			"§8Crouch + Interact to pick up"
-		]);
-
-		const inv = player.getComponent("minecraft:inventory")?.container;
-		if (inv) {{
-			const leftover = inv.addItem(itemStack);
-			if (leftover) {{
-				dim.spawnItem(leftover, loc);
-			}}
-		}} else {{
-			dim.spawnItem(itemStack, loc);
-		}}
-
+		addOrDropItem(player, createGemItem(clampedVariant), loc);
 		dim.playSound("random.pop", loc, {{ volume: 0.9, pitch: 1.25 }});
 		player.onScreenDisplay.setActionBar(`§aPicked up §f${{gemName}}`);
 	}});
 }});
 
-// 2. PLACEMENT MECHANIC: Interact on any Block while holding a Gem Item
+// 2. PLACEMENT & CATALOG BLOCK-CLICK: Interact on any Block while holding Catalog or Gem Item
 world.beforeEvents.playerInteractWithBlock.subscribe((event) => {{
 	const {{ player, itemStack, block, blockFace }} = event;
-	if (!itemStack || !itemStack.typeId.startsWith(ITEM_PREFIX)) return;
+	if (!itemStack) return;
+
+	if (itemStack.typeId === MENU_ITEM_ID) {{
+		event.cancel = true;
+		if (!canInteract(player)) return;
+		system.run(() => {{
+			openGemMenu(player);
+		}});
+		return;
+	}}
+
+	if (!itemStack.typeId.startsWith(ITEM_PREFIX)) return;
 
 	const suffix = itemStack.typeId.slice(ITEM_PREFIX.length);
 	const variant = parseInt(suffix, 10);
@@ -269,7 +444,7 @@ world.beforeEvents.playerInteractWithBlock.subscribe((event) => {{
 	}});
 }});
 
-// 3. COMMAND HANDLER: `/scriptevent <prefix>:spawn <0..5>`, `:items`, `:clear`, `:help`
+// 3. COMMAND HANDLER: `/scriptevent <prefix>:menu`, `:spawn <0..5>`, `:items`, `:clear`, `:help`
 system.afterEvents.scriptEventReceive.subscribe((event) => {{
 	const id = event.id.toLowerCase();
 	const player = event.sourceEntity;
@@ -277,33 +452,32 @@ system.afterEvents.scriptEventReceive.subscribe((event) => {{
 
 	const msg = (event.message ?? "").trim().toLowerCase();
 
+	if (id === `${{CMD_PREFIX}}:menu` || id === "gem:menu") {{
+		openGemMenu(player);
+		return;
+	}}
+
+	if (id === `${{CMD_PREFIX}}:catalog` || id === "gem:catalog") {{
+		if (ensureCatalogItem(player)) {{
+			player.onScreenDisplay.setActionBar(`§bAdded §f${{CATALOG_NAME}} §bto inventory`);
+		}} else {{
+			openGemMenu(player);
+		}}
+		return;
+	}}
+
 	if (id === `${{CMD_PREFIX}}:help` || id === "gem:help") {{
 		printPackHelp(player);
 		return;
 	}}
 
 	if (id === `${{CMD_PREFIX}}:items` || id === "gem:items") {{
-		const inv = player.getComponent("minecraft:inventory")?.container;
-		if (!inv) return;
-		for (let i = 0; i < GEM_NAMES.length; i++) {{
-			const st = new ItemStack(`${{ITEM_PREFIX}}${{i}}`, 1);
-			st.nameTag = `§r§d✦ ${{GEM_NAMES[i]}}`;
-			st.setLore([
-				`§7${{PACK_TITLE}}`,
-				"§eInteract on any block to place",
-				"§8Crouch + Interact to pick up"
-			]);
-			inv.addItem(st);
-		}}
-		player.sendMessage(`§a[${{PACK_TITLE}}] Added all ${{GEM_NAMES.length}} Gem items to your inventory!`);
+		giveAllGems(player);
 		return;
 	}}
 
 	if (id === `${{CMD_PREFIX}}:clear` || id === "gem:clear") {{
-		const dim = player.dimension;
-		const ents = dim.getEntities({{ type: ENTITY_ID }});
-		for (const e of ents) e.remove();
-		player.sendMessage(`§e[${{PACK_TITLE}}] Cleared ${{ents.length}} spawned gem entities.`);
+		clearSpawnedGems(player);
 		return;
 	}}
 
@@ -338,9 +512,7 @@ system.afterEvents.scriptEventReceive.subscribe((event) => {{
 		ent.nameTag = GEM_NAMES[variant];
 
 		dim.playSound("block.amethyst_block.chime", spawnPos, {{ volume: 1.0, pitch: 1.1 }});
-		player.sendMessage(
-			`§a[${{PACK_TITLE}}] Spawned §f${{GEM_NAMES[variant]}}§a! (§eCrouch + Interact§a to pick up, §eInteract§a on block to place)`
-		);
+		player.onScreenDisplay.setActionBar(`§aSpawned §f${{GEM_NAMES[variant]}}`);
 	}}
 }});
 """
@@ -421,6 +593,7 @@ def build_pack_01_imposter(repo_root: Path, scenes: dict[str, GaussianScene]) ->
             ],
             "dependencies": [
                 {"module_name": "@minecraft/server", "version": "1.14.0"},
+                {"module_name": "@minecraft/server-ui", "version": "1.3.0"},
                 {"uuid": "a793a382-f5c7-43cf-87b6-c564175b9de3", "version": [1, 2, 0]},
             ],
         },
@@ -506,6 +679,8 @@ def build_pack_01_imposter(repo_root: Path, scenes: dict[str, GaussianScene]) ->
             },
         )
 
+    write_catalog_item_json(bp_dir, "imposter_menu", "gem_1", "Imposter Gem Catalog")
+
     # Script
     (bp_dir / "scripts").mkdir(parents=True, exist_ok=True)
     (bp_dir / "scripts" / "main.js").write_text(
@@ -515,6 +690,9 @@ def build_pack_01_imposter(repo_root: Path, scenes: dict[str, GaussianScene]) ->
             cmd_prefix="imposter",
             entity_id="custom:imposter",
             item_prefix="custom:gem_item_",
+            icon_prefix="textures/items/gem_",
+            menu_item_id="custom:imposter_menu",
+            catalog_name="Imposter Gem Catalog",
             variants=variants,
             include_sample_runner=False,
         ),
@@ -690,6 +868,7 @@ def build_pack_01_imposter(repo_root: Path, scenes: dict[str, GaussianScene]) ->
     lang_lines = ["entity.custom:imposter.name=Gaussian Splat Imposter Gem"]
     for v in variants:
         lang_lines.append(f"item.custom:gem_item_{v['idx']}.name=✦ {v['label']}")
+    lang_lines.append("item.custom:imposter_menu.name=✦ Imposter Gem Catalog")
     (rp_dir / "texts").mkdir(parents=True, exist_ok=True)
     (rp_dir / "texts" / "en_US.lang").write_text("\n".join(lang_lines) + "\n", encoding="utf-8")
     write_install_cmd(pack_dir, "Imposter_BP", "Imposter_RP", "01 Spherical Imposter Pack")
@@ -790,6 +969,7 @@ def build_pack_02_polymesh(repo_root: Path, scenes: dict[str, GaussianScene]) ->
             ],
             "dependencies": [
                 {"module_name": "@minecraft/server", "version": "1.14.0"},
+                {"module_name": "@minecraft/server-ui", "version": "1.3.0"},
                 {"uuid": rp_uuid, "version": [1, 0, 0]},
             ],
         },
@@ -873,6 +1053,8 @@ def build_pack_02_polymesh(repo_root: Path, scenes: dict[str, GaussianScene]) ->
             },
         )
 
+    write_catalog_item_json(bp_dir, "polymesh_menu", "poly_gem_1", "PolyMesh Gem Catalog")
+
     # Script
     (bp_dir / "scripts").mkdir(parents=True, exist_ok=True)
     (bp_dir / "scripts" / "main.js").write_text(
@@ -882,6 +1064,9 @@ def build_pack_02_polymesh(repo_root: Path, scenes: dict[str, GaussianScene]) ->
             cmd_prefix="polymesh",
             entity_id="custom:poly_gem",
             item_prefix="custom:poly_gem_item_",
+            icon_prefix="textures/items/poly_gem_",
+            menu_item_id="custom:polymesh_menu",
+            catalog_name="PolyMesh Gem Catalog",
             variants=variants,
             include_sample_runner=False,
         ),
@@ -1001,6 +1186,7 @@ def build_pack_02_polymesh(repo_root: Path, scenes: dict[str, GaussianScene]) ->
     lang_lines = ["entity.custom:poly_gem.name=Shrinkwrap 3D Mesh Gem"]
     for v in variants:
         lang_lines.append(f"item.custom:poly_gem_item_{v['idx']}.name=✦ {v['label']}")
+    lang_lines.append("item.custom:polymesh_menu.name=✦ PolyMesh Gem Catalog")
     (rp_dir / "texts").mkdir(parents=True, exist_ok=True)
     (rp_dir / "texts" / "en_US.lang").write_text("\n".join(lang_lines) + "\n", encoding="utf-8")
     write_install_cmd(pack_dir, "PolyMesh_BP", "PolyMesh_RP", "02 Shrinkwrap PolyMesh Pack")
@@ -1112,6 +1298,7 @@ def build_pack_03_full_gs(repo_root: Path, scenes: dict[str, GaussianScene]) -> 
             ],
             "dependencies": [
                 {"module_name": "@minecraft/server", "version": "1.14.0"},
+                {"module_name": "@minecraft/server-ui", "version": "1.3.0"},
                 {"uuid": "78ec6229-ce0d-4d97-9bf3-8fe3584a86ea", "version": [1, 2, 0]},
             ],
         },
@@ -1197,6 +1384,8 @@ def build_pack_03_full_gs(repo_root: Path, scenes: dict[str, GaussianScene]) -> 
             },
         )
 
+    write_catalog_item_json(bp_dir, "splat_menu", "splat_gem_1", "Splat Gem Catalog")
+
     # Script
     (bp_dir / "scripts" / "main.js").write_text(
         generate_pack_script_js(
@@ -1205,6 +1394,9 @@ def build_pack_03_full_gs(repo_root: Path, scenes: dict[str, GaussianScene]) -> 
             cmd_prefix="splat",
             entity_id="custom:splat_cloud",
             item_prefix="custom:splat_gem_item_",
+            icon_prefix="textures/items/splat_gem_",
+            menu_item_id="custom:splat_menu",
+            catalog_name="Splat Gem Catalog",
             variants=variants,
             include_sample_runner=True,
         ),
@@ -1317,6 +1509,7 @@ def build_pack_03_full_gs(repo_root: Path, scenes: dict[str, GaussianScene]) -> 
     lang_lines = ["entity.custom:splat_cloud.name=Full Gaussian Splat Cloud Gem"]
     for v in variants:
         lang_lines.append(f"item.custom:splat_gem_item_{v['idx']}.name=✦ {v['label']}")
+    lang_lines.append("item.custom:splat_menu.name=✦ Splat Gem Catalog")
     (rp_dir / "texts").mkdir(parents=True, exist_ok=True)
     (rp_dir / "texts" / "en_US.lang").write_text("\n".join(lang_lines) + "\n", encoding="utf-8")
     write_install_cmd(pack_dir, "SplatRenderer_BP", "SplatRenderer_RP", "03 Full Gaussian Splat Pack")

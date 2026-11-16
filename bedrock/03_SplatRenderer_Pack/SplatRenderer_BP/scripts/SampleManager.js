@@ -65,9 +65,6 @@ export default class SampleManager {
 				}
 			}
 		}
-		if (this.tickCount === 200) {
-			world.sendMessage("Type '/scriptevent sample:run' in chat to run this sample.");
-		}
 		this.tickCount++;
 	}
 
