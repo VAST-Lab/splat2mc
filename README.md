@@ -28,36 +28,46 @@ Place your `.ply` Gaussian Splat files in `source/` and build any combination of
 * **Oriented Particle Streamer (`tools/export_oriented.py`):** Look at a block and click **Toggle Particle Stream** in the catalog menu (or run `/scriptevent sample:run`) to stream 5,000 double-sided oriented Gaussian splat particles.
 * **In-Game Commands:** `/scriptevent splat:menu`, `:items`, `:spawn <0..N-1|slug>`, `:clear`, `:help`, `sample:run`
 
+### 4. `bedrock/04_FBXMesh_Pack` — High-to-Low Poly FBX Bake *(Optional)*
+* **High-Poly Scan Decimation & Clean (`tools/export_fbx_mesh.py`):** Reads binary FBX photogrammetry scans from `source/FBX/*.fbx` + `*_diffuse.png`, converts Z-up scans to Y-up Minecraft coordinates, keeps the largest connected component (no floating triangles/vertices), performs QEM decimation + gentle Taubin smoothing, and emits 4-vertex degenerate quads (`MCPE-186053` safe).
+* **UV Unwrap & High-to-Low Texture Bake:** Automatically unwraps connected UV charts with distance-transform padding and bakes high-res diffuse textures (plus optional `--bake-normals` PBR tangent-space normal maps, off by default).
+* **Configurable Bake Tiers:**
+  * **Low (`low`):** `6,000` tris @ `512px` baked diffuse
+  * **Medium (`med`, default):** `16,000` tris @ `1024px` baked diffuse
+  * **High (`high`):** `28,000` tris @ `2048px` baked diffuse
+* **In-Game Commands:** `/scriptevent fbxmesh:menu`, `:items`, `:spawn <0..N-1|slug>`, `:clear`, `:help`
+
 ---
 
 ## Building & Installing Packs
 
 ### Windows One-Click Interactive Builder
-Double-click **`build_gems_to_mc.bat`** in the repo root. It will:
-1. Ask which pack(s) to rebuild (defaults to **1 & 2** — `01_SplatImposter_Pack` and `02_SplatMesh_Pack`, leaving `03_SplatRenderer_Pack` untouched).
+Double-click **`update_pack_gems.bat`** (or `build_gems_to_mc.bat` if present) in the repo root. It will:
+1. Ask which pack(s) to rebuild (defaults to **1 & 2** — `01_SplatImposter_Pack` and `02_SplatMesh_Pack`, leaving `03_SplatRenderer_Pack` and `04_FBXMesh_Pack` untouched unless selected).
 2. Ask which quality level(s) to include for each pack (defaults to **Medium** quality).
-3. Clear the target pack folder and rebuild everything from `source/*.ply`.
+3. Rebuild pack assets from `source/*.ply` (and `source/FBX/*.fbx` for Pack 04) while preserving any existing install scripts (`install.cmd`, `*.bat`, `*.ps1`, `*.sh`) in the pack folders.
 
-To install a built pack into Minecraft Bedrock on Windows, double-click `install.cmd` inside that pack's folder (e.g., `bedrock/01_SplatImposter_Pack/install.cmd`).
+To install all built packs into Minecraft Bedrock on Windows, double-click **`install_gems_to_mc.bat`** (or `install.cmd` inside a specific pack's folder).
 
 ### Command Line (`uv`)
 ```bash
 # Install dependencies
 uv sync
 
-# Interactive wizard (same as build_gems_to_mc.bat)
+# Interactive wizard (same as update_pack_gems.bat)
 uv run python tools/build_all_packs.py
 
 # Non-interactive defaults (Packs 01 & 02 at Medium quality)
 uv run python tools/build_all_packs.py -y
 
+# Build Pack 04 (FBX High-to-Low Bake) explicitly
+uv run python tools/build_all_packs.py --pack 4 -y
+
 # Build a single pack directly with custom tiers
 uv run python tools/build_imposter_pack.py --tiers low,med
 uv run python tools/build_mesh_pack.py --tiers smooth,faceted
 uv run python tools/build_splat_pack.py --tiers 1500
-
-# Run validation tests
-uv run pytest -v
+uv run python tools/build_fbx_pack.py --tiers med
 ```
 
 ### Imposter Preview Lab

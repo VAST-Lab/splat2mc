@@ -1,0 +1,18 @@
+{
+  "format_version": "1.8.0",
+  "animations": {
+    "animation.fbx_gem.held_and_dropped": {
+      "loop": true,
+      "bones": {
+        "root": {
+          "scale": 0.45,
+          "position": [
+            0,
+            3,
+            0
+          ]
+        }
+      }
+    }
+  }
+}

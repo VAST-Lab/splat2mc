@@ -1,0 +1,49 @@
+{
+  "format_version": "1.8.0",
+  "render_controllers": {
+    "controller.render.fbx_gem": {
+      "arrays": {
+        "geometries": {
+          "Array.gem_geos": [
+            "Geometry.gem_0",
+            "Geometry.gem_1",
+            "Geometry.gem_2",
+            "Geometry.gem_3",
+            "Geometry.gem_4",
+            "Geometry.gem_5"
+          ]
+        },
+        "textures": {
+          "Array.gem_texs": [
+            "Texture.gem_0",
+            "Texture.gem_1",
+            "Texture.gem_2",
+            "Texture.gem_3",
+            "Texture.gem_4",
+            "Texture.gem_5"
+          ]
+        }
+      },
+      "geometry": "Array.gem_geos[query.variant]",
+      "materials": [
+        {
+          "*": "Material.default"
+        }
+      ],
+      "textures": [
+        "Array.gem_texs[query.variant]"
+      ]
+    },
+    "controller.render.fbx_gem_attachable": {
+      "geometry": "Geometry.default",
+      "materials": [
+        {
+          "*": "Material.default"
+        }
+      ],
+      "textures": [
+        "Texture.default"
+      ]
+    }
+  }
+}

@@ -8,9 +8,13 @@ call :run_install "bedrock\02_SplatMesh_Pack"
 if errorlevel 1 goto :fail
 call :run_install "bedrock\03_SplatRenderer_Pack"
 if errorlevel 1 goto :fail
+if exist "%~dp0bedrock\04_FBXMesh_Pack\install.cmd" (
+    call :run_install "bedrock\04_FBXMesh_Pack"
+    if errorlevel 1 goto :fail
+)
 
 echo.
-echo All 3 Bedrock packs installed successfully!
+echo Bedrock packs installed successfully!
 echo.
 pause
 exit /b 0

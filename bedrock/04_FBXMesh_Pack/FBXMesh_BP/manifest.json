@@ -1,0 +1,60 @@
+{
+  "format_version": 2,
+  "header": {
+    "name": "04 FBX High-to-Low Mesh Pack BP",
+    "description": "Tier 4: Photogrammetry FBX High-to-Low Poly Bake (16000 tris @ 1024px)",
+    "uuid": "d4044991-61e0-49f1-9c2a-592837164501",
+    "version": [
+      1,
+      0,
+      0
+    ],
+    "min_engine_version": [
+      1,
+      21,
+      0
+    ]
+  },
+  "modules": [
+    {
+      "description": "FBX baked mesh entities and items",
+      "type": "data",
+      "uuid": "d4044991-61e0-49f1-9c2a-592837164503",
+      "version": [
+        1,
+        0,
+        0
+      ]
+    },
+    {
+      "description": "Spawn commands and pickup/placement logic",
+      "type": "script",
+      "language": "javascript",
+      "uuid": "d4044991-61e0-49f1-9c2a-592837164504",
+      "version": [
+        1,
+        0,
+        0
+      ],
+      "entry": "scripts/main.js"
+    }
+  ],
+  "dependencies": [
+    {
+      "module_name": "@minecraft/server",
+      "version": "1.14.0"
+    },
+    {
+      "module_name": "@minecraft/server-ui",
+      "version": "1.3.0"
+    },
+    {
+      "uuid": "e4044991-61e0-49f1-9c2a-592837164502",
+      "version": [
+        1,
+        0,
+        0
+      ]
+    }
+  ]
+}

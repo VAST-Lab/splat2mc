@@ -1,0 +1,24 @@
+{
+  "resource_pack_name": "04 FBX High-to-Low Mesh Pack RP",
+  "texture_name": "atlas.items",
+  "texture_data": {
+    "fbx_gem_0": {
+      "textures": "textures/items/fbx_gem_0"
+    },
+    "fbx_gem_1": {
+      "textures": "textures/items/fbx_gem_1"
+    },
+    "fbx_gem_2": {
+      "textures": "textures/items/fbx_gem_2"
+    },
+    "fbx_gem_3": {
+      "textures": "textures/items/fbx_gem_3"
+    },
+    "fbx_gem_4": {
+      "textures": "textures/items/fbx_gem_4"
+    },
+    "fbx_gem_5": {
+      "textures": "textures/items/fbx_gem_5"
+    }
+  }
+}

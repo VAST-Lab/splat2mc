@@ -18,6 +18,7 @@ TOOLS_DIR = Path(__file__).resolve().parent
 if str(TOOLS_DIR) not in sys.path:
     sys.path.insert(0, str(TOOLS_DIR))
 
+from build_fbx_pack import FBX_SETTINGS, FBX_TIERS, build_fbx_pack
 from build_imposter_pack import IMPOSTER_SETTINGS, QUALITY_TIERS, build_imposter_pack
 from build_mesh_pack import MESH_SETTINGS, MESH_TIERS, build_mesh_pack
 from build_splat_pack import SPLAT_SETTINGS, SPLAT_TIERS, build_splat_pack
@@ -32,7 +33,7 @@ def resolve_pack_selection(selection: str) -> list[str]:
     if not raw or raw in ("a", "active"):
         return list(DEFAULT_PACK_IDS)
     if raw == "all":
-        return ["01", "02", "03"]
+        return ["01", "02", "03", "04"]
 
     alias = {
         "1": "01",
@@ -45,6 +46,10 @@ def resolve_pack_selection(selection: str) -> list[str]:
         "3": "03",
         "03": "03",
         "splat": "03",
+        "4": "04",
+        "04": "04",
+        "fbx": "04",
+        "fbxmesh": "04",
     }
     chosen: list[str] = []
     for tok in re.split(r"[\s,]+", raw):
@@ -66,11 +71,12 @@ def prompt_pack_selection() -> list[str]:
     print("  [1] 01_SplatImposter_Pack  (Spherical Imposter)")
     print("  [2] 02_SplatMesh_Pack      (Shrinkwrap 3D Mesh)")
     print("  [3] 03_SplatRenderer_Pack  (Full Gaussian Splat Cloud)")
+    print("  [4] 04_FBXMesh_Pack        (High-to-Low FBX Bake)")
     print("  [A] Active packs (1 & 2)   [Default]")
-    print("  [ALL] All 3 packs (1, 2, 3)")
+    print("  [ALL] All 4 packs (1, 2, 3, 4)")
     while True:
         try:
-            ans = input("Enter choice (e.g. 1, 2, 1,2, A) [Default: 1,2]: ")
+            ans = input("Enter choice (e.g. 1, 2, 1,2, 4, A) [Default: 1,2]: ")
         except EOFError:
             ans = ""
         try:
@@ -87,10 +93,16 @@ def main() -> None:
         "--pack",
         type=str,
         default=None,
-        help="Pack(s) to build: active (1,2), all (1,2,3), or comma-separated 1,2,3",
+        help="Pack(s) to build: active (1,2), all (1,2,3,4), or comma-separated 1,2,3,4",
     )
     parser.add_argument("--source-dir", type=Path, default=None, help="Source .ply directory (default: source/)")
+    parser.add_argument("--fbx-dir", type=Path, default=None, help="Source .fbx directory for pack 04 (default: source/FBX/)")
     parser.add_argument("--tiers", type=str, default=None, help="Override quality tiers (e.g. med, smooth, all)")
+    parser.add_argument(
+        "--bake-normals",
+        action="store_true",
+        help="Also bake tangent-space normal maps for pack 04 (off by default)",
+    )
     parser.add_argument("-y", "--yes", action="store_true", help="Non-interactive mode (use default medium quality)")
     args = parser.parse_args()
 
@@ -107,6 +119,7 @@ def main() -> None:
         "01": ("01_SplatImposter_Pack", QUALITY_TIERS, IMPOSTER_SETTINGS["default_tiers"]),
         "02": ("02_SplatMesh_Pack", MESH_TIERS, MESH_SETTINGS["default_tiers"]),
         "03": ("03_SplatRenderer_Pack", SPLAT_TIERS, SPLAT_SETTINGS["default_tiers"]),
+        "04": ("04_FBXMesh_Pack", FBX_TIERS, FBX_SETTINGS["default_tiers"]),
     }
 
     chosen_tiers: dict[str, list[dict]] = {}
@@ -127,6 +140,13 @@ def main() -> None:
             build_mesh_pack(repo_root, source_dir=args.source_dir, tiers=chosen_tiers[pid])
         elif pid == "03":
             build_splat_pack(repo_root, source_dir=args.source_dir, tiers=chosen_tiers[pid])
+        elif pid == "04":
+            build_fbx_pack(
+                repo_root,
+                source_dir=args.fbx_dir,
+                tiers=chosen_tiers[pid],
+                bake_normals=args.bake_normals,
+            )
 
     print(f"\n✓ Finished building selected packs ({', '.join(selected_packs)}) in {time.time() - t0:.2f}s!")
 

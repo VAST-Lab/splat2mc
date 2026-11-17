@@ -115,20 +115,91 @@ def test_pack_03_full_gs_pack():
     assert "/scriptevent sample:run" in main_js
 
 
+def test_pack_04_fbx_mesh_pack():
+    from collections import deque
+
+    pack_dir = REPO_ROOT / "bedrock" / "04_FBXMesh_Pack"
+    bp_dir = pack_dir / "FBXMesh_BP"
+    rp_dir = pack_dir / "FBXMesh_RP"
+
+    bp_man = json.loads((bp_dir / "manifest.json").read_text(encoding="utf-8"))
+    rp_man = json.loads((rp_dir / "manifest.json").read_text(encoding="utf-8"))
+    assert bp_man["header"]["uuid"] == rp_man["dependencies"][0]["uuid"]
+    assert any(d.get("module_name") == "@minecraft/server-ui" for d in bp_man["dependencies"])
+    assert (bp_dir / "items" / "fbxmesh_menu.json").exists()
+    assert not (rp_dir / "attachables").exists()
+
+    fbx_count = len(list((REPO_ROOT / "source" / "FBX").glob("*.fbx")))
+    assert fbx_count == 6
+    for i in range(fbx_count):
+        geo_path = rp_dir / "models" / "entity" / f"fbx_gem_{i}.geo.json"
+        tex_path = rp_dir / "textures" / "entity" / f"fbx_gem_tex_{i}.png"
+        icon_path = rp_dir / "textures" / "items" / f"fbx_gem_{i}.png"
+        normal_path = rp_dir / "textures" / "entity" / f"fbx_gem_tex_{i}_normal.png"
+        assert geo_path.exists()
+        assert tex_path.exists()
+        assert icon_path.exists()
+        assert not normal_path.exists()
+
+        geo = json.loads(geo_path.read_text(encoding="utf-8"))["minecraft:geometry"][0]
+        assert geo["bones"][1]["name"] == "gem_mesh"
+        pm = geo["bones"][1]["poly_mesh"]
+        n_pos = len(pm["positions"])
+        n_uv = len(pm["uvs"])
+        polys = pm["polys"]
+        assert 0 < n_pos < 65536
+        assert 0 < n_uv < 65536
+        assert 0 < len(polys) <= 16000
+        # Every polygon must be a 4-vertex degenerate quad (prevents MCPE-186053)
+        assert all(len(poly) == 4 and poly[2][0] == poly[3][0] for poly in polys)
+        for u, v in pm["uvs"]:
+            assert -1e-6 <= u <= 1.0 + 1e-6 and -1e-6 <= v <= 1.0 + 1e-6
+
+        # Zero unreferenced vertices & single connected component (no floating tris/verts)
+        adj: list[list[int]] = [[] for _ in range(n_pos)]
+        used: set[int] = set()
+        for poly in polys:
+            a, b, c = poly[0][0], poly[1][0], poly[2][0]
+            used.update((a, b, c))
+            adj[a].extend((b, c))
+            adj[b].extend((a, c))
+            adj[c].extend((a, b))
+        assert len(used) == n_pos
+        visited = {0}
+        q = deque([0])
+        while q:
+            cur = q.popleft()
+            for nb in adj[cur]:
+                if nb not in visited:
+                    visited.add(nb)
+                    q.append(nb)
+        assert len(visited) == n_pos, f"Variant {i} has disconnected mesh pieces ({len(visited)}/{n_pos})"
+
+    assert not (rp_dir / "models" / "entity" / f"fbx_gem_{fbx_count}.geo.json").exists()
+
+    main_js = (bp_dir / "scripts" / "main.js").read_text(encoding="utf-8")
+    assert "openGemMenu" in main_js
+    assert "initPlayer" in main_js
+    assert 'const CMD_PREFIX = "fbxmesh";' in main_js
+
+
 def test_interactive_pack_and_tier_selectors(tmp_path):
     import sys
 
     sys.path.insert(0, str(REPO_ROOT / "tools"))
     from build_all_packs import resolve_pack_selection
+    from build_fbx_pack import FBX_TIERS
     from build_imposter_pack import QUALITY_TIERS, _molang_tier_switch
     from build_mesh_pack import MESH_TIERS
     from build_splat_pack import SPLAT_TIERS
-    from pack_utils import reset_pack_directory, resolve_tier_selection
+    from pack_utils import reset_pack_directory, resolve_tier_selection, write_install_cmd
 
     # Pack selector defaults to 01 + 02; supports explicit combinations and 'all'
     assert resolve_pack_selection("") == ["01", "02"]
     assert resolve_pack_selection("2,3") == ["02", "03"]
-    assert resolve_pack_selection("all") == ["01", "02", "03"]
+    assert resolve_pack_selection("4") == ["04"]
+    assert resolve_pack_selection("fbx") == ["04"]
+    assert resolve_pack_selection("all") == ["01", "02", "03", "04"]
 
     # Default quality tier for each pack is single medium tier
     imp_default = resolve_tier_selection(QUALITY_TIERS, "", ["med"])
@@ -141,14 +212,28 @@ def test_interactive_pack_and_tier_selectors(tmp_path):
     splat_default = resolve_tier_selection(SPLAT_TIERS, "", ["1500"])
     assert [t["key"] for t in splat_default] == ["1500"]
 
+    fbx_default = resolve_tier_selection(FBX_TIERS, "", ["med"])
+    assert [t["key"] for t in fbx_default] == ["med"]
+
     assert len(resolve_tier_selection(QUALITY_TIERS, "1,2", ["med"])) == 2
     assert len(resolve_tier_selection(MESH_TIERS, "all", ["smooth"])) == 3
+    assert len(resolve_tier_selection(FBX_TIERS, "all", ["med"])) == 3
 
-    # reset_pack_directory wipes stale files while preserving pack_icon.png
+    # reset_pack_directory wipes stale files while preserving pack_icon.png and install scripts
     pack = tmp_path / "pack"
     (pack / "BP").mkdir(parents=True)
     (pack / "BP" / "pack_icon.png").write_bytes(b"ICON")
     (pack / "BP" / "stale.json").write_text("old", encoding="utf-8")
+    (pack / "install.cmd").write_text("@echo custom install\n", encoding="utf-8")
+    (pack / "helper.bat").write_text("@echo custom helper\n", encoding="utf-8")
     reset_pack_directory(pack, preserve_relpaths=["BP/pack_icon.png"])
     assert (pack / "BP" / "pack_icon.png").read_bytes() == b"ICON"
     assert not (pack / "BP" / "stale.json").exists()
+    assert (pack / "install.cmd").read_text(encoding="utf-8") == "@echo custom install\n"
+    assert (pack / "helper.bat").read_text(encoding="utf-8") == "@echo custom helper\n"
+
+    # write_install_cmd leaves existing install.cmd untouched by default
+    write_install_cmd(pack, "BP", "RP", "TestPack")
+    assert (pack / "install.cmd").read_text(encoding="utf-8") == "@echo custom install\n"
+    write_install_cmd(pack, "BP", "RP", "TestPack", overwrite=True)
+    assert "TestPack" in (pack / "install.cmd").read_text(encoding="utf-8")

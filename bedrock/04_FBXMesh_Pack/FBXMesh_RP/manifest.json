@@ -1,0 +1,40 @@
+{
+  "format_version": 2,
+  "header": {
+    "name": "04 FBX High-to-Low Mesh Pack RP",
+    "description": "Tier 4: Photogrammetry FBX High-to-Low Poly Bake (16000 tris @ 1024px)",
+    "uuid": "e4044991-61e0-49f1-9c2a-592837164502",
+    "version": [
+      1,
+      0,
+      0
+    ],
+    "min_engine_version": [
+      1,
+      21,
+      0
+    ]
+  },
+  "modules": [
+    {
+      "description": "Baked low-poly FBX meshes and textures",
+      "type": "resources",
+      "uuid": "e4044991-61e0-49f1-9c2a-592837164505",
+      "version": [
+        1,
+        0,
+        0
+      ]
+    }
+  ],
+  "dependencies": [
+    {
+      "uuid": "d4044991-61e0-49f1-9c2a-592837164501",
+      "version": [
+        1,
+        0,
+        0
+      ]
+    }
+  ]
+}

@@ -17,7 +17,16 @@ def write_json(path: Path, data: dict) -> None:
     path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
 
 
-def write_install_cmd(pack_dir: Path, bp_name: str, rp_name: str, title: str) -> None:
+def write_install_cmd(
+    pack_dir: Path,
+    bp_name: str,
+    rp_name: str,
+    title: str,
+    overwrite: bool = False,
+) -> None:
+    install_path = pack_dir / "install.cmd"
+    if not overwrite and install_path.exists():
+        return
     content = f"""@echo off
 setlocal
 echo Installing {title} to Bedrock development folders...
@@ -53,7 +62,7 @@ echo Done! Cleanly installed {bp_name} and {rp_name} to:
 echo   %BEDROCK_DEV%
 pause
 """
-    (pack_dir / "install.cmd").write_text(content, encoding="utf-8")
+    install_path.write_text(content, encoding="utf-8")
 
 
 def format_ply_display_name(ply_path: Path) -> tuple[str, str]:
@@ -90,17 +99,29 @@ def cleanup_stale_files(directory: Path, pattern: str, keep_names: set[str]) -> 
     return removed
 
 
-def reset_pack_directory(pack_dir: Path, preserve_relpaths: list[str] | None = None) -> None:
+def reset_pack_directory(
+    pack_dir: Path,
+    preserve_relpaths: list[str] | None = None,
+    preserve_scripts: bool = True,
+) -> None:
     """
-    Clear out an existing pack directory completely and recreate it, preserving only
-    explicit non-generated binary/support files (e.g. `pack_icon.png`, particle assets).
+    Clear out an existing pack directory completely and recreate it, preserving
+    explicit support files (e.g. `pack_icon.png`, particle assets) and any existing
+    install/helper scripts (`*.cmd`, `*.bat`, `*.ps1`, `*.sh`).
     """
     preserved: dict[str, bytes] = {}
-    if pack_dir.exists() and preserve_relpaths:
-        for rel in preserve_relpaths:
-            src = pack_dir / rel
-            if src.is_file():
-                preserved[rel] = src.read_bytes()
+    if pack_dir.exists():
+        if preserve_relpaths:
+            for rel in preserve_relpaths:
+                src = pack_dir / rel
+                if src.is_file():
+                    preserved[rel] = src.read_bytes()
+        if preserve_scripts:
+            for ext in ("*.cmd", "*.bat", "*.ps1", "*.sh"):
+                for src in pack_dir.rglob(ext):
+                    if src.is_file():
+                        rel = src.relative_to(pack_dir).as_posix()
+                        preserved.setdefault(rel, src.read_bytes())
 
     if pack_dir.exists():
         shutil.rmtree(pack_dir)

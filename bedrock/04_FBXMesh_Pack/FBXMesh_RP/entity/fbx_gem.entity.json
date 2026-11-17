@@ -1,0 +1,32 @@
+{
+  "format_version": "1.10.0",
+  "minecraft:client_entity": {
+    "description": {
+      "identifier": "custom:fbx_gem",
+      "materials": {
+        "default": "fbx_gem_opaque"
+      },
+      "textures": {
+        "default": "textures/entity/fbx_gem_tex_0",
+        "gem_0": "textures/entity/fbx_gem_tex_0",
+        "gem_1": "textures/entity/fbx_gem_tex_1",
+        "gem_2": "textures/entity/fbx_gem_tex_2",
+        "gem_3": "textures/entity/fbx_gem_tex_3",
+        "gem_4": "textures/entity/fbx_gem_tex_4",
+        "gem_5": "textures/entity/fbx_gem_tex_5"
+      },
+      "geometry": {
+        "default": "geometry.fbx_gem_0",
+        "gem_0": "geometry.fbx_gem_0",
+        "gem_1": "geometry.fbx_gem_1",
+        "gem_2": "geometry.fbx_gem_2",
+        "gem_3": "geometry.fbx_gem_3",
+        "gem_4": "geometry.fbx_gem_4",
+        "gem_5": "geometry.fbx_gem_5"
+      },
+      "render_controllers": [
+        "controller.render.fbx_gem"
+      ]
+    }
+  }
+}
