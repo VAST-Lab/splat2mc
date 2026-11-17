@@ -46,7 +46,7 @@ MESH_SETTINGS = {
     "smooth_iters": 1,
     "grid_res": 216,
     "n_views": 42,
-    "view_res": 288,
+    "view_res": 384,
     "icon_res": 128,
 }
 

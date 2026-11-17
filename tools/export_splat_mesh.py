@@ -205,21 +205,29 @@ def _render_single_rgbd_view(
     cov_yy = (v0 * v0 * s2x + v1 * v1 * s2y + v2 * v2 * s2z).astype(np.float32)
 
     y_sign = -1.0 if scene.flip_y else 1.0
+    # Soften high-frequency SH view glints (0.50x) and avoid oversaturated color grading
+    # so baked textures preserve clean, scan-faithful colors without black/white speckling.
+    f_rest_soft = scene.f_rest[order] * np.float32(0.50) if scene.has_rest else scene.f_rest[order]
     r_sh, g_sh, b_sh = eval_sh_color_ortho(
         float(-cam_x),
         float(-cam_y * y_sign),
         float(cam_z),
         scene.f_dc[order],
-        scene.f_rest[order],
+        f_rest_soft,
         scene.has_rest,
     )
-    r_sh, g_sh, b_sh = apply_color_grade(r_sh, g_sh, b_sh, hue_shift_deg=hue_shift_deg)
+    if abs(hue_shift_deg) > 1e-3:
+        r_sh, g_sh, b_sh = apply_color_grade(
+            r_sh, g_sh, b_sh, hue_shift_deg=hue_shift_deg, saturation_boost=1.0, brightness_boost=1.0
+        )
 
     rgb_pre, alpha, z_hit = rasterize_splats_ortho_rgbd(
         res, res, u_px, v_px, z_sorted, cov_xx, cov_xy, cov_yy,
         r_sh, g_sh, b_sh, scene.op[order],
     )
-    rgb = np.clip(rgb_pre / np.maximum(alpha[..., None], 1e-4), 0.0, 1.0).astype(np.float32)
+    # Only un-premultiply where accumulated opacity is strong; avoid division blowup at rims
+    rgb = np.where(alpha[..., None] > 0.25, rgb_pre / np.maximum(alpha[..., None], 0.25), rgb_pre)
+    rgb = np.clip(rgb, 0.0, 1.0).astype(np.float32)
 
     return {
         "cam": np.array([cam_x, cam_y, cam_z], dtype=np.float32),
@@ -235,7 +243,7 @@ def _render_single_rgbd_view(
 def render_multiview_rgbd(
     scene: GaussianScene,
     n_views: int = 42,
-    view_res: int = 288,
+    view_res: int = 384,
     fill_ratio: float = 0.84,
     hue_shift_deg: float = 0.0,
 ) -> list[dict]:
@@ -353,8 +361,11 @@ def extract_splat_highpoly_mesh(
 
     verts, faces, _, _ = marching_cubes(tsdf, level=0.0, spacing=(vox_sz, vox_sz, vox_sz))
     verts = verts.astype(np.float32) + origin
-    # skimage marching_cubes on (outside > 0, inside < 0) gives inward winding -> flip to outward
-    faces = faces[:, [0, 2, 1]].astype(np.int32)
+    faces = faces.astype(np.int32)
+    # Ensure outward winding (positive signed volume) directly at extraction time
+    signed_vol = float(np.sum(np.cross(verts[faces[:, 1]] - verts[faces[:, 0]], verts[faces[:, 2]] - verts[faces[:, 0]]) * verts[faces[:, 0]]))
+    if signed_vol < 0.0:
+        faces = faces[:, [0, 2, 1]].astype(np.int32)
     return verts, faces
 
 
@@ -411,8 +422,11 @@ def _bake_multiview_texels_kernel(
             if x0 < 0 or x0 >= W - 1 or y0 < 0 or y0 >= H - 1:
                 continue
 
-            a_nn = alphas[v, int(fy + 0.5), int(fx + 0.5)]
-            if a_nn < 0.25:
+            a00 = alphas[v, y0, x0]
+            a10 = alphas[v, y0, x0 + 1]
+            a01 = alphas[v, y0 + 1, x0]
+            a11 = alphas[v, y0 + 1, x0 + 1]
+            if min(a00, min(a10, min(a01, a11))) < 0.40:
                 continue
 
             # Nearest/2x2 depth visibility check to prevent projecting occluders onto hidden faces
@@ -523,28 +537,33 @@ def bake_splat_textures(
         atlas_res, low_verts, low_norms, low_faces, low_uvs, low_face_uvs
     )
 
-    # Prepare fallback DC colors from nearest opaque splats for any deep crevice
-    solid = scene.op > 0.15
+    # Prepare smooth k=8 inverse-distance weighted DC fallback for any deep occluded crevice
+    solid = scene.op > 0.25
     if int(np.sum(solid)) < 32:
-        solid = scene.op > 0.02
+        solid = scene.op > 0.05
     splat_pts = np.column_stack([scene.x[solid], scene.y[solid], scene.z[solid]])
     splat_tree = cKDTree(splat_pts, leafsize=32)
-    _, nn_s = splat_tree.query(t_pos, k=1, workers=-1)
+    dists, nn_idx = splat_tree.query(t_pos, k=8, workers=-1)
     C0 = 0.28209479177387814
     dc = scene.f_dc[solid]
     fb_r = np.clip(0.5 + C0 * dc[:, 0], 0.0, 1.0)
     fb_g = np.clip(0.5 + C0 * dc[:, 1], 0.0, 1.0)
     fb_b = np.clip(0.5 + C0 * dc[:, 2], 0.0, 1.0)
-    fb_r, fb_g, fb_b = apply_color_grade(fb_r, fb_g, fb_b, hue_shift_deg=hue_shift_deg)
+    if abs(hue_shift_deg) > 1e-3:
+        fb_r, fb_g, fb_b = apply_color_grade(
+            fb_r, fb_g, fb_b, hue_shift_deg=hue_shift_deg, saturation_boost=1.0, brightness_boost=1.0
+        )
+    w_k = 1.0 / (dists + 1e-4 * max(scene.span, 1e-3)) ** 2
+    w_k /= np.sum(w_k, axis=1, keepdims=True)
     fallback_rgb = np.column_stack([
-        (fb_r[nn_s] * 255.0 + 0.5).astype(np.uint8),
-        (fb_g[nn_s] * 255.0 + 0.5).astype(np.uint8),
-        (fb_b[nn_s] * 255.0 + 0.5).astype(np.uint8),
+        (np.sum(fb_r[nn_idx] * w_k, axis=1) * 255.0 + 0.5).astype(np.uint8),
+        (np.sum(fb_g[nn_idx] * w_k, axis=1) * 255.0 + 0.5).astype(np.uint8),
+        (np.sum(fb_b[nn_idx] * w_k, axis=1) * 255.0 + 0.5).astype(np.uint8),
     ])
 
     half_world = (scene.span / fill_ratio) * 0.52
     vox_sz = (2.0 * half_world) / float(grid_res)
-    depth_tol = max(5.5 * vox_sz, scene.span * 0.03)
+    depth_tol = max(6.5 * vox_sz, scene.span * 0.04)
 
     cams = np.stack([v["cam"] for v in views]).astype(np.float32)
     rights = np.stack([v["right"] for v in views]).astype(np.float32)
@@ -590,7 +609,7 @@ def bake_splat_to_lowpoly(
     atlas_res: int = 1024,
     smooth_iters: int = 1,
     n_views: int = 42,
-    view_res: int = 288,
+    view_res: int = 384,
     grid_res: int = 216,
     fill_ratio: float = 0.84,
     hue_shift_deg: float = 0.0,
@@ -655,7 +674,7 @@ if __name__ == "__main__":
     parser.add_argument("--smooth-iters", type=int, default=1, help="Taubin smoothing passes (default: 1)")
     parser.add_argument("--grid-res", type=int, default=216, help="TSDF voxel resolution (default: 216)")
     parser.add_argument("--views", type=int, default=42, help="Fibonacci sphere view count (default: 42)")
-    parser.add_argument("--view-res", type=int, default=288, help="Per-view render resolution (default: 288)")
+    parser.add_argument("--view-res", type=int, default=384, help="Per-view render resolution (default: 384)")
     parser.add_argument("--bake-normals", action="store_true", help="Also bake tangent-space normal map")
     parser.add_argument("--no-flip-y", action="store_true", help="Do not flip PLY Y axis")
     args = parser.parse_args()

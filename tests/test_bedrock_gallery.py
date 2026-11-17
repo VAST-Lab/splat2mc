@@ -108,6 +108,17 @@ def _assert_single_component_degenerate_quad_pack(
                     q.append(nb)
         assert len(visited) == n_pos, f"Variant {i} has disconnected mesh pieces ({len(visited)}/{n_pos})"
 
+        # Outward face winding check (positive signed volume prevents inside-out backfaces & broken bakes)
+        import numpy as np
+
+        pos_arr = np.asarray(pm["positions"], dtype=np.float64)
+        tris_arr = np.asarray([[poly[0][0], poly[1][0], poly[2][0]] for poly in polys], dtype=np.int32)
+        v0 = pos_arr[tris_arr[:, 0]]
+        v1 = pos_arr[tris_arr[:, 1]]
+        v2 = pos_arr[tris_arr[:, 2]]
+        signed_vol = float(np.sum(np.cross(v1 - v0, v2 - v0) * v0)) / 6.0
+        assert signed_vol > 0.0, f"Variant {i} has inverted/inside-out winding (signed_vol={signed_vol:.3f})"
+
     assert not (rp_dir / "models" / "entity" / f"{prefix}_{variant_count}.geo.json").exists()
 
 

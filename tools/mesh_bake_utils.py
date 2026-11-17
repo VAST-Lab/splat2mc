@@ -80,15 +80,23 @@ def decimate_and_clean_mesh(
         mesh = max(parts, key=lambda m: len(m.faces))
     mesh.remove_unreferenced_vertices()
 
-    if mesh.is_watertight and mesh.volume < 0:
-        mesh.invert()
-    else:
+    if len(mesh.faces) > 0:
+        # Unconditionally ensure outward winding even if a few non-manifold edges exist
+        vol = float(mesh.volume)
+        if vol < 0.0:
+            mesh.invert()
+        elif abs(vol) < 1e-7:
+            rad = mesh.vertices - mesh.centroid
+            if float(np.mean(np.sum(rad * mesh.vertex_normals, axis=1))) < 0.0:
+                mesh.invert()
         trimesh.repair.fix_normals(mesh)
 
     if smooth_iters > 0:
         trimesh.smoothing.filter_taubin(mesh, lamb=0.40, nu=-0.42, iterations=smooth_iters)
         mesh.update_faces(mesh.nondegenerate_faces())
         mesh.remove_unreferenced_vertices()
+        if len(mesh.faces) > 0 and float(mesh.volume) < 0.0:
+            mesh.invert()
 
     return mesh
 
@@ -105,11 +113,40 @@ def _ortho_basis_for_normal(n: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.n
     return n, t, b
 
 
+def _split_disconnected_groups(
+    fids: np.ndarray,
+    nbr_list: list[list[int]],
+) -> list[np.ndarray]:
+    """Group `fids` into edge-connected face components so peeled regions stay cohesive."""
+    if len(fids) <= 1:
+        return [fids]
+    allowed = set(int(f) for f in fids)
+    visited: set[int] = set()
+    groups: list[np.ndarray] = []
+    for seed in fids:
+        s = int(seed)
+        if s in visited:
+            continue
+        comp = [s]
+        visited.add(s)
+        head = 0
+        while head < len(comp):
+            cur = comp[head]
+            head += 1
+            for nb in nbr_list[cur]:
+                if nb in allowed and nb not in visited:
+                    visited.add(nb)
+                    comp.append(nb)
+        groups.append(np.array(comp, dtype=np.int32))
+    return groups
+
+
 def _split_chart_if_overlapping(
     face_ids: np.ndarray,
     verts: np.ndarray,
     faces: np.ndarray,
     face_normals: np.ndarray,
+    nbr_list: list[list[int]],
     depth_limit: int = 4,
 ) -> list[tuple[np.ndarray, np.ndarray, np.ndarray]]:
     """
@@ -123,20 +160,22 @@ def _split_chart_if_overlapping(
     n_dir, u_ax, v_ax = _ortho_basis_for_normal(mean_n)
 
     dots = face_normals[face_ids] @ n_dir
-    valid_mask = dots > 0.20
+    valid_mask = dots > 0.22
     if not np.all(valid_mask):
         good = face_ids[valid_mask]
         bad = face_ids[~valid_mask]
         out = []
         if len(good) > 0:
-            out.extend(_split_chart_if_overlapping(good, verts, faces, face_normals, depth_limit))
+            for g in _split_disconnected_groups(good, nbr_list):
+                out.extend(_split_chart_if_overlapping(g, verts, faces, face_normals, nbr_list, depth_limit))
         if len(bad) > 0:
             if len(bad) == len(face_ids):
                 for fid in bad:
                     _, tu, tv = _ortho_basis_for_normal(face_normals[fid])
                     out.append((np.array([fid], dtype=np.int32), tu, tv))
             else:
-                out.extend(_split_chart_if_overlapping(bad, verts, faces, face_normals, depth_limit))
+                for b in _split_disconnected_groups(bad, nbr_list):
+                    out.extend(_split_chart_if_overlapping(b, verts, faces, face_normals, nbr_list, depth_limit))
         return out
 
     if len(face_ids) <= 1 or depth_limit <= 0:
@@ -152,7 +191,8 @@ def _split_chart_if_overlapping(
         neg_f = face_ids[areas2 <= 1e-10]
         out = []
         if len(pos_f) > 0:
-            out.extend(_split_chart_if_overlapping(pos_f, verts, faces, face_normals, depth_limit - 1))
+            for g in _split_disconnected_groups(pos_f, nbr_list):
+                out.extend(_split_chart_if_overlapping(g, verts, faces, face_normals, nbr_list, depth_limit - 1))
         for fid in neg_f:
             _, tu, tv = _ortho_basis_for_normal(face_normals[fid])
             out.append((np.array([fid], dtype=np.int32), tu, tv))
@@ -193,19 +233,22 @@ def _split_chart_if_overlapping(
     if len(front) == 0 or len(back) == 0:
         half = len(face_ids) // 2
         front, back = face_ids[:half], face_ids[half:]
-    return (
-        _split_chart_if_overlapping(front, verts, faces, face_normals, depth_limit - 1)
-        + _split_chart_if_overlapping(back, verts, faces, face_normals, depth_limit - 1)
-    )
+    out = []
+    for g in _split_disconnected_groups(front, nbr_list):
+        out.extend(_split_chart_if_overlapping(g, verts, faces, face_normals, nbr_list, depth_limit - 1))
+    for g in _split_disconnected_groups(back, nbr_list):
+        out.extend(_split_chart_if_overlapping(g, verts, faces, face_normals, nbr_list, depth_limit - 1))
+    return out
 
 
 def unwrap_connected_charts(
     mesh: trimesh.Trimesh,
     atlas_res: int = 1024,
-    pad_px: int = 4,
+    pad_px: int = 2,
 ) -> tuple[np.ndarray, np.ndarray]:
     """
-    Build overlap-free connected planar UV charts and shelf-pack them into `[0, 1]^2`.
+    Build overlap-free connected planar UV charts via normal-cone region growing (without
+    rigid axis cuts) and shelf-pack them cleanly into `[0, 1]^2`.
     Returns `(uv_coords [N_uv, 2], face_uv_idx [N_f, 3])` with bottom-up `[0, 1]` UVs.
     """
     verts = mesh.vertices.astype(np.float32)
@@ -213,33 +256,48 @@ def unwrap_connected_charts(
     fn = mesh.face_normals.astype(np.float32)
     n_faces = len(faces)
 
-    abs_n = np.abs(fn)
-    dom_axis = np.argmax(abs_n, axis=1)
-    dom_sign = np.where(fn[np.arange(n_faces), dom_axis] >= 0, 0, 1)
-    dom_dir = dom_axis * 2 + dom_sign
+    # Build face adjacency list
+    nbr_list: list[list[int]] = [[] for _ in range(n_faces)]
+    for f0, f1 in mesh.face_adjacency:
+        a, b = int(f0), int(f1)
+        nbr_list[a].append(b)
+        nbr_list[b].append(a)
 
-    adj_pairs = mesh.face_adjacency
-    valid_adj = (dom_dir[adj_pairs[:, 0]] == dom_dir[adj_pairs[:, 1]]) & (
-        np.sum(fn[adj_pairs[:, 0]] * fn[adj_pairs[:, 1]], axis=1) > 0.40
-    )
-    vp = adj_pairs[valid_adj]
-    f_adj = csr_matrix(
-        (
-            np.ones(len(vp) * 2, dtype=np.int8),
-            (np.concatenate([vp[:, 0], vp[:, 1]]), np.concatenate([vp[:, 1], vp[:, 0]])),
-        ),
-        shape=(n_faces, n_faces),
-    )
-    _, f_labels = connected_components(f_adj, directed=False)
+    # Grow smooth connected normal-cone charts starting from largest faces
+    areas = mesh.area_faces.astype(np.float32)
+    seed_order = np.argsort(-areas)
+    assigned = np.zeros(n_faces, dtype=bool)
+    min_dot = 0.45  # ~63 deg cone keeps crystal lobes whole while avoiding stretching
 
-    groups: dict[int, list[int]] = {}
-    for fid, lbl in enumerate(f_labels):
-        groups.setdefault(int(lbl), []).append(fid)
+    grouped_charts: list[np.ndarray] = []
+    for seed in seed_order:
+        s = int(seed)
+        if assigned[s]:
+            continue
+        assigned[s] = True
+        chart = [s]
+        mean_n = fn[s].copy()
+        head = 0
+        while head < len(chart):
+            cur = chart[head]
+            head += 1
+            for nb in nbr_list[cur]:
+                if assigned[nb]:
+                    continue
+                if float(np.dot(fn[nb], mean_n)) >= min_dot:
+                    assigned[nb] = True
+                    chart.append(nb)
+                    # Update running mean normal cleanly
+                    k = len(chart)
+                    mean_n = mean_n * ((k - 1) / k) + fn[nb] * (1.0 / k)
+                    nl = float(np.linalg.norm(mean_n))
+                    if nl > 1e-6:
+                        mean_n /= nl
+        grouped_charts.append(np.array(chart, dtype=np.int32))
 
     raw_charts = []
-    for fids in groups.values():
-        f_arr = np.array(fids, dtype=np.int32)
-        raw_charts.extend(_split_chart_if_overlapping(f_arr, verts, faces, fn))
+    for f_arr in grouped_charts:
+        raw_charts.extend(_split_chart_if_overlapping(f_arr, verts, faces, fn, nbr_list))
 
     chart_data = []
     total_area_2d = 0.0
@@ -932,9 +990,13 @@ def write_binary_fbx(
                             "Properties70",
                             [],
                             [
+                                _fbx_p70_color("AmbientColor", 1.0, 1.0, 1.0),
                                 _fbx_p70_color("DiffuseColor", 1.0, 1.0, 1.0),
+                                _fbx_p70_float("DiffuseFactor", 1.0),
                                 _fbx_p70_color("SpecularColor", 0.05, 0.05, 0.05),
+                                _fbx_p70_float("SpecularFactor", 0.05),
                                 _fbx_p70_float("ShininessExponent", 8.0),
+                                ("P", [("S", "Opacity"), ("S", "double"), ("S", "Number"), ("S", ""), ("D", 1.0)], None),
                             ],
                         ),
                     ],
