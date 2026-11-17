@@ -13,7 +13,8 @@
         "gem_2": "textures/entity/fbx_gem_tex_2",
         "gem_3": "textures/entity/fbx_gem_tex_3",
         "gem_4": "textures/entity/fbx_gem_tex_4",
-        "gem_5": "textures/entity/fbx_gem_tex_5"
+        "gem_5": "textures/entity/fbx_gem_tex_5",
+        "gem_6": "textures/entity/fbx_gem_tex_6"
       },
       "geometry": {
         "default": "geometry.fbx_gem_0",
@@ -22,7 +23,8 @@
         "gem_2": "geometry.fbx_gem_2",
         "gem_3": "geometry.fbx_gem_3",
         "gem_4": "geometry.fbx_gem_4",
-        "gem_5": "geometry.fbx_gem_5"
+        "gem_5": "geometry.fbx_gem_5",
+        "gem_6": "geometry.fbx_gem_6"
       },
       "render_controllers": [
         "controller.render.fbx_gem"

@@ -9,9 +9,9 @@ const ITEM_PREFIX = "custom:fbx_gem_item_";
 const ICON_PREFIX = "textures/items/fbx_gem_";
 const MENU_ITEM_ID = "custom:fbxmesh_menu";
 const CATALOG_NAME = "FBX Mesh Gem Catalog";
-const GEM_NAMES = ["Florite", "Malachite", "Red Flat 01", "Red Flat 02", "Rhodochrosite", "Turquoise"];
-const PRIMARY_INDICES = [0, 1, 2, 3, 4, 5];
-const SLUG_MAP = {"florite": 0, "malachite": 1, "red_flat_01": 2, "red_flat_02": 3, "rhodochrosite": 4, "turquoise": 5, "0": 0, "1": 1, "2": 2, "3": 3, "4": 4, "5": 5};
+const GEM_NAMES = ["Florite", "Gold Nugget", "Malachite", "Red Flat 01", "Red Flat 02", "Rhodochrosite", "Turquoise"];
+const PRIMARY_INDICES = [0, 1, 2, 3, 4, 5, 6];
+const SLUG_MAP = {"florite": 0, "gold_nugget": 1, "malachite": 2, "red_flat_01": 3, "red_flat_02": 4, "rhodochrosite": 5, "turquoise": 6, "0": 0, "1": 1, "2": 2, "3": 3, "4": 4, "5": 5, "6": 6};
 
 const interactCooldown = new Map();
 const greetedPlayers = new Set();
@@ -106,7 +106,7 @@ export async function openGemMenu(player) {
 		.title(`✦ ${CATALOG_NAME}`)
 		.body("§7Select a gem to add to your inventory.\n§8Place: Interact block | Pick up: Crouch + Interact");
 
-	form.button("\u00a7a\u2726 Give All 6 Gems", `${ICON_PREFIX}0`);
+	form.button("\u00a7a\u2726 Give All 7 Gems", `${ICON_PREFIX}0`);
 	for (let i = 0; i < GEM_NAMES.length; i++) {
 		form.button(GEM_NAMES[i], `${ICON_PREFIX}${i}`);
 	}

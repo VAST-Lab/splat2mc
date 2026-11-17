@@ -19,6 +19,9 @@
     },
     "fbx_gem_5": {
       "textures": "textures/items/fbx_gem_5"
+    },
+    "fbx_gem_6": {
+      "textures": "textures/items/fbx_gem_6"
     }
   }
 }

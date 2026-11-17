@@ -1,0 +1,65 @@
+{
+  "format_version": "1.8.0",
+  "render_controllers": {
+    "controller.render.poly_gem": {
+      "arrays": {
+        "geometries": {
+          "Array.gem_geos": [
+            "Geometry.gem_0",
+            "Geometry.gem_1",
+            "Geometry.gem_2",
+            "Geometry.gem_3",
+            "Geometry.gem_4",
+            "Geometry.gem_5",
+            "Geometry.gem_6",
+            "Geometry.gem_7",
+            "Geometry.gem_8",
+            "Geometry.gem_9",
+            "Geometry.gem_10",
+            "Geometry.gem_11",
+            "Geometry.gem_12",
+            "Geometry.gem_13"
+          ]
+        },
+        "textures": {
+          "Array.gem_texs": [
+            "Texture.gem_0",
+            "Texture.gem_1",
+            "Texture.gem_2",
+            "Texture.gem_3",
+            "Texture.gem_4",
+            "Texture.gem_5",
+            "Texture.gem_6",
+            "Texture.gem_7",
+            "Texture.gem_8",
+            "Texture.gem_9",
+            "Texture.gem_10",
+            "Texture.gem_11",
+            "Texture.gem_12",
+            "Texture.gem_13"
+          ]
+        }
+      },
+      "geometry": "Array.gem_geos[query.variant]",
+      "materials": [
+        {
+          "*": "Material.default"
+        }
+      ],
+      "textures": [
+        "Array.gem_texs[query.variant]"
+      ]
+    },
+    "controller.render.poly_gem_attachable": {
+      "geometry": "Geometry.default",
+      "materials": [
+        {
+          "*": "Material.default"
+        }
+      ],
+      "textures": [
+        "Texture.default"
+      ]
+    }
+  }
+}

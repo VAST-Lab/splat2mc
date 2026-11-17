@@ -53,7 +53,68 @@ def test_pack_01_imposter_quality_tiers_and_angle_pinning():
     assert 'const CMD_PREFIX = "imposter";' in main_js
 
 
-def test_pack_02_polymesh_shrinkwrap_options():
+def _assert_single_component_degenerate_quad_pack(
+    rp_dir: Path,
+    prefix: str,
+    tex_prefix: str,
+    variant_count: int,
+    max_polys: int,
+    expect_normals: bool = False,
+) -> None:
+    from collections import deque
+
+    for i in range(variant_count):
+        geo_path = rp_dir / "models" / "entity" / f"{prefix}_{i}.geo.json"
+        tex_path = rp_dir / "textures" / "entity" / f"{tex_prefix}_{i}.png"
+        icon_path = rp_dir / "textures" / "items" / f"{prefix}_{i}.png"
+        normal_path = rp_dir / "textures" / "entity" / f"{tex_prefix}_{i}_normal.png"
+        assert geo_path.exists()
+        assert tex_path.exists()
+        assert icon_path.exists()
+        if not expect_normals:
+            assert not normal_path.exists()
+
+        geo = json.loads(geo_path.read_text(encoding="utf-8"))["minecraft:geometry"][0]
+        assert geo["bones"][1]["name"] == "gem_mesh"
+        pm = geo["bones"][1]["poly_mesh"]
+        n_pos = len(pm["positions"])
+        n_uv = len(pm["uvs"])
+        polys = pm["polys"]
+        assert 0 < n_pos < 65536
+        assert 0 < n_uv < 65536
+        assert 0 < len(polys) <= max_polys
+        # Every polygon must be a 4-vertex degenerate quad (prevents MCPE-186053)
+        assert all(len(poly) == 4 and poly[2][0] == poly[3][0] for poly in polys)
+        for u, v in pm["uvs"]:
+            assert -1e-6 <= u <= 1.0 + 1e-6 and -1e-6 <= v <= 1.0 + 1e-6
+
+        # Zero unreferenced vertices & single connected component (no floating tris/verts)
+        adj: list[list[int]] = [[] for _ in range(n_pos)]
+        used: set[int] = set()
+        for poly in polys:
+            a, b, c = poly[0][0], poly[1][0], poly[2][0]
+            used.update((a, b, c))
+            adj[a].extend((b, c))
+            adj[b].extend((a, c))
+            adj[c].extend((a, b))
+        assert len(used) == n_pos
+        visited = {0}
+        q = deque([0])
+        while q:
+            cur = q.popleft()
+            for nb in adj[cur]:
+                if nb not in visited:
+                    visited.add(nb)
+                    q.append(nb)
+        assert len(visited) == n_pos, f"Variant {i} has disconnected mesh pieces ({len(visited)}/{n_pos})"
+
+    assert not (rp_dir / "models" / "entity" / f"{prefix}_{variant_count}.geo.json").exists()
+
+
+def test_pack_02_splat_high_to_low_mesh():
+    archive_dir = REPO_ROOT / "bedrock" / "_archive" / "mesh_converted_from_splat"
+    assert (archive_dir / "SplatMesh_BP" / "manifest.json").exists()
+
     pack_dir = REPO_ROOT / "bedrock" / "02_SplatMesh_Pack"
     bp_dir = pack_dir / "SplatMesh_BP"
     rp_dir = pack_dir / "SplatMesh_RP"
@@ -65,26 +126,20 @@ def test_pack_02_polymesh_shrinkwrap_options():
     assert (bp_dir / "items" / "polymesh_menu.json").exists()
     assert not (rp_dir / "attachables").exists()
 
-    ply_count = len(list((REPO_ROOT / "source").glob("*.ply"))) or 2
-    expected_quads = [1536, 294] * ply_count
-    for i, exp_q in enumerate(expected_quads):
-        geo_path = rp_dir / "models" / "entity" / f"poly_gem_{i}.geo.json"
-        assert geo_path.exists()
-        geo = json.loads(geo_path.read_text(encoding="utf-8"))["minecraft:geometry"][0]
-        assert geo["bones"][1]["name"] == "gem_mesh"
-        pm = geo["bones"][1]["poly_mesh"]
-        assert len(pm["polys"]) == exp_q, f"Variant {i} expected {exp_q} quads, got {len(pm['polys'])}"
-        # Every polygon must be a 4-vertex quad (prevents MCPE-186053 missing triangles in Bedrock)
-        assert all(len(poly) == 4 for poly in pm["polys"])
-        for u, v in pm["uvs"]:
-            assert 0.0 <= u <= 1.0 and 0.0 <= v <= 1.0
-
-    assert not (rp_dir / "models" / "entity" / f"poly_gem_{len(expected_quads)}.geo.json").exists()
+    ply_files = sorted((REPO_ROOT / "source").glob("*.ply"), key=lambda p: p.name.lower())
+    _assert_single_component_degenerate_quad_pack(
+        rp_dir, prefix="poly_gem", tex_prefix="poly_gem_tex", variant_count=len(ply_files), max_polys=14000
+    )
 
     main_js = (bp_dir / "scripts" / "main.js").read_text(encoding="utf-8")
     assert "openGemMenu" in main_js
     assert "initPlayer" in main_js
     assert 'const CMD_PREFIX = "polymesh";' in main_js
+
+    fbx_out = REPO_ROOT / "source" / "FBX_Output"
+    for p in ply_files:
+        assert (fbx_out / f"{p.stem}_splat.fbx").exists()
+        assert (fbx_out / f"{p.stem}_splat_diffuse.png").exists()
 
 
 def test_pack_03_full_gs_pack():
@@ -116,8 +171,6 @@ def test_pack_03_full_gs_pack():
 
 
 def test_pack_04_fbx_mesh_pack():
-    from collections import deque
-
     pack_dir = REPO_ROOT / "bedrock" / "04_FBXMesh_Pack"
     bp_dir = pack_dir / "FBXMesh_BP"
     rp_dir = pack_dir / "FBXMesh_RP"
@@ -129,58 +182,21 @@ def test_pack_04_fbx_mesh_pack():
     assert (bp_dir / "items" / "fbxmesh_menu.json").exists()
     assert not (rp_dir / "attachables").exists()
 
-    fbx_count = len(list((REPO_ROOT / "source" / "FBX").glob("*.fbx")))
-    assert fbx_count == 6
-    for i in range(fbx_count):
-        geo_path = rp_dir / "models" / "entity" / f"fbx_gem_{i}.geo.json"
-        tex_path = rp_dir / "textures" / "entity" / f"fbx_gem_tex_{i}.png"
-        icon_path = rp_dir / "textures" / "items" / f"fbx_gem_{i}.png"
-        normal_path = rp_dir / "textures" / "entity" / f"fbx_gem_tex_{i}_normal.png"
-        assert geo_path.exists()
-        assert tex_path.exists()
-        assert icon_path.exists()
-        assert not normal_path.exists()
-
-        geo = json.loads(geo_path.read_text(encoding="utf-8"))["minecraft:geometry"][0]
-        assert geo["bones"][1]["name"] == "gem_mesh"
-        pm = geo["bones"][1]["poly_mesh"]
-        n_pos = len(pm["positions"])
-        n_uv = len(pm["uvs"])
-        polys = pm["polys"]
-        assert 0 < n_pos < 65536
-        assert 0 < n_uv < 65536
-        assert 0 < len(polys) <= 16000
-        # Every polygon must be a 4-vertex degenerate quad (prevents MCPE-186053)
-        assert all(len(poly) == 4 and poly[2][0] == poly[3][0] for poly in polys)
-        for u, v in pm["uvs"]:
-            assert -1e-6 <= u <= 1.0 + 1e-6 and -1e-6 <= v <= 1.0 + 1e-6
-
-        # Zero unreferenced vertices & single connected component (no floating tris/verts)
-        adj: list[list[int]] = [[] for _ in range(n_pos)]
-        used: set[int] = set()
-        for poly in polys:
-            a, b, c = poly[0][0], poly[1][0], poly[2][0]
-            used.update((a, b, c))
-            adj[a].extend((b, c))
-            adj[b].extend((a, c))
-            adj[c].extend((a, b))
-        assert len(used) == n_pos
-        visited = {0}
-        q = deque([0])
-        while q:
-            cur = q.popleft()
-            for nb in adj[cur]:
-                if nb not in visited:
-                    visited.add(nb)
-                    q.append(nb)
-        assert len(visited) == n_pos, f"Variant {i} has disconnected mesh pieces ({len(visited)}/{n_pos})"
-
-    assert not (rp_dir / "models" / "entity" / f"fbx_gem_{fbx_count}.geo.json").exists()
+    fbx_files = sorted((REPO_ROOT / "source" / "FBX").glob("*.fbx"), key=lambda p: p.name.lower())
+    assert len(fbx_files) >= 6
+    _assert_single_component_degenerate_quad_pack(
+        rp_dir, prefix="fbx_gem", tex_prefix="fbx_gem_tex", variant_count=len(fbx_files), max_polys=16000
+    )
 
     main_js = (bp_dir / "scripts" / "main.js").read_text(encoding="utf-8")
     assert "openGemMenu" in main_js
     assert "initPlayer" in main_js
     assert 'const CMD_PREFIX = "fbxmesh";' in main_js
+
+    fbx_out = REPO_ROOT / "source" / "FBX_Output"
+    for p in fbx_files:
+        assert (fbx_out / f"{p.stem}.fbx").exists()
+        assert (fbx_out / f"{p.stem}_diffuse.png").exists()
 
 
 def test_interactive_pack_and_tier_selectors(tmp_path):
@@ -206,8 +222,8 @@ def test_interactive_pack_and_tier_selectors(tmp_path):
     assert [t["key"] for t in imp_default] == ["med"]
     assert _molang_tier_switch(imp_default, "cols") == "32.0"
 
-    mesh_default = resolve_tier_selection(MESH_TIERS, "", ["smooth"])
-    assert [t["key"] for t in mesh_default] == ["smooth"]
+    mesh_default = resolve_tier_selection(MESH_TIERS, "", ["med"])
+    assert [t["key"] for t in mesh_default] == ["med"]
 
     splat_default = resolve_tier_selection(SPLAT_TIERS, "", ["1500"])
     assert [t["key"] for t in splat_default] == ["1500"]
@@ -216,8 +232,26 @@ def test_interactive_pack_and_tier_selectors(tmp_path):
     assert [t["key"] for t in fbx_default] == ["med"]
 
     assert len(resolve_tier_selection(QUALITY_TIERS, "1,2", ["med"])) == 2
-    assert len(resolve_tier_selection(MESH_TIERS, "all", ["smooth"])) == 3
+    assert len(resolve_tier_selection(MESH_TIERS, "all", ["med"])) == 3
     assert len(resolve_tier_selection(FBX_TIERS, "all", ["med"])) == 3
+
+    # Binary FBX export round-trips cleanly with UVs + paired diffuse PNG
+    import numpy as np
+    import trimesh
+    from PIL import Image
+    from export_fbx_mesh import load_fbx_mesh
+    from mesh_bake_utils import unwrap_connected_charts, write_binary_fbx
+
+    box = trimesh.creation.icosphere(subdivisions=2, radius=1.0)
+    b_uv, b_fuv = unwrap_connected_charts(box, atlas_res=64)
+    img = Image.new("RGBA", (64, 64), (10, 180, 220, 255))
+    fbx_p, png_p = write_binary_fbx(box, b_uv, b_fuv, img, tmp_path / "gem_test.fbx")
+    assert fbx_p.exists() and png_p.exists()
+    rv, rf, ruv, rfuv = load_fbx_mesh(fbx_p, convert_zup=False)
+    assert len(rv) == len(box.vertices)
+    assert len(rf) == len(box.faces)
+    assert ruv is not None and len(ruv) == len(b_uv)
+    assert rfuv is not None and rfuv.shape == b_fuv.shape
 
     # reset_pack_directory wipes stale files while preserving pack_icon.png and install scripts
     pack = tmp_path / "pack"

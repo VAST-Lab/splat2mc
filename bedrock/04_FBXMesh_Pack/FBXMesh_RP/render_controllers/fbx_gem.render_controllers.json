@@ -10,7 +10,8 @@
             "Geometry.gem_2",
             "Geometry.gem_3",
             "Geometry.gem_4",
-            "Geometry.gem_5"
+            "Geometry.gem_5",
+            "Geometry.gem_6"
           ]
         },
         "textures": {
@@ -20,7 +21,8 @@
             "Texture.gem_2",
             "Texture.gem_3",
             "Texture.gem_4",
-            "Texture.gem_5"
+            "Texture.gem_5",
+            "Texture.gem_6"
           ]
         }
       },

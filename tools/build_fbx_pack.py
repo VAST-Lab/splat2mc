@@ -27,6 +27,7 @@ from export_fbx_mesh import (
     load_fbx_mesh,
     render_fbx_icon,
     unwrap_connected_charts,
+    write_binary_fbx,
     write_fbx_bedrock_geo,
 )
 from pack_utils import (
@@ -47,6 +48,7 @@ from pack_utils import (
 # ==============================================================================
 FBX_SETTINGS = {
     "source_dir": "source/FBX",
+    "fbx_out_dir": "source/FBX_Output",
     "pack_dir": "bedrock/04_FBXMesh_Pack",
     "bp_name": "FBXMesh_BP",
     "rp_name": "FBXMesh_RP",
@@ -98,9 +100,12 @@ def build_fbx_pack(
     tiers: list[dict] | None = None,
     bake_normals: bool = False,
     smooth_iters: int = FBX_SETTINGS["smooth_iters"],
+    save_fbx: bool = False,
+    fbx_out_dir: Path | None = None,
 ) -> list[dict]:
     t0 = time.time()
     src = source_dir if source_dir is not None else (repo_root / FBX_SETTINGS["source_dir"])
+    fbx_export_dir = fbx_out_dir if fbx_out_dir is not None else (repo_root / FBX_SETTINGS["fbx_out_dir"])
     active_tiers = (
         list(tiers)
         if tiers is not None
@@ -217,6 +222,17 @@ def build_fbx_pack(
                 atlas_res=v["atlas_res"],
                 target_size=FBX_SETTINGS["target_size"],
             )
+
+            if save_fbx:
+                out_stem = fbx_path.stem if single_tier else f"{fbx_path.stem}_{v['tris'] // 1000}k"
+                write_binary_fbx(
+                    low_mesh,
+                    low_uv,
+                    low_fuv,
+                    diff_img,
+                    fbx_export_dir / f"{out_stem}.fbx",
+                    normal_img=nrm_img,
+                )
 
             icon_img = render_fbx_icon(
                 low_mesh, low_uv, low_fuv, diff_img, icon_res=FBX_SETTINGS["icon_res"]
@@ -444,16 +460,25 @@ def main() -> None:
     parser.add_argument("--tiers", type=str, default=None, help="Comma-separated tiers: low, med, high, or all")
     parser.add_argument("--bake-normals", action="store_true", help="Bake tangent-space normal maps + PBR texture_set.json")
     parser.add_argument("--smooth-iters", type=int, default=FBX_SETTINGS["smooth_iters"], help="Taubin smoothing iterations (default: 1)")
+    parser.add_argument("--save-fbx", action="store_true", help="Also save reduced .fbx + _diffuse.png to source/FBX_Output/")
+    parser.add_argument("--fbx-out-dir", type=Path, default=None, help="Output folder for --save-fbx (default: source/FBX_Output/)")
     parser.add_argument("-y", "--yes", action="store_true", help="Non-interactive mode (use default tier: med)")
     args = parser.parse_args()
 
     repo_root = Path(__file__).resolve().parent.parent
+    save_fbx = args.save_fbx
     if args.tiers is not None:
         selected_tiers = resolve_tier_selection(FBX_TIERS, args.tiers, FBX_SETTINGS["default_tiers"])
     elif args.yes:
         selected_tiers = resolve_tier_selection(FBX_TIERS, "", FBX_SETTINGS["default_tiers"])
     else:
         selected_tiers = prompt_quality_tiers("04_FBXMesh_Pack", FBX_TIERS, FBX_SETTINGS["default_tiers"])
+        if not save_fbx:
+            try:
+                ans = input("Save reduced .fbx + _diffuse.png copies to source/FBX_Output/? [y/N]: ").strip().lower()
+            except EOFError:
+                ans = ""
+            save_fbx = ans in ("y", "yes")
 
     build_fbx_pack(
         repo_root,
@@ -461,6 +486,8 @@ def main() -> None:
         tiers=selected_tiers,
         bake_normals=args.bake_normals,
         smooth_iters=args.smooth_iters,
+        save_fbx=save_fbx,
+        fbx_out_dir=args.fbx_out_dir,
     )
 
 

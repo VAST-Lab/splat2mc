@@ -1,8 +1,8 @@
 {
   "format_version": 2,
   "header": {
-    "name": "02 Shrinkwrap PolyMesh Pack RP",
-    "description": "Tier 2: Quad-Sphere Shrinkwrap 3DGS mesh + 6-view studio bake (Faceted)",
+    "name": "02 Splat High-to-Low Mesh Pack RP",
+    "description": "Tier 2: TSDF High-to-Low 3DGS PolyMesh + Connected UV Bake (14000 tris @ 1024px)",
     "uuid": "a2024991-61e0-49f1-9c2a-592837164502",
     "version": [
       1,
@@ -17,7 +17,7 @@
   },
   "modules": [
     {
-      "description": "Shrinkwrap poly_mesh models and 6-view textures",
+      "description": "TSDF high-to-low poly_mesh models and multi-view textures",
       "type": "resources",
       "uuid": "a2024991-61e0-49f1-9c2a-592837164505",
       "version": [

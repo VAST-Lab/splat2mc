@@ -37,6 +37,11 @@
         "minecraft:variant": {
           "value": 5
         }
+      },
+      "splat:variant_6": {
+        "minecraft:variant": {
+          "value": 6
+        }
       }
     },
     "components": {
@@ -89,7 +94,8 @@
             "splat:variant_2",
             "splat:variant_3",
             "splat:variant_4",
-            "splat:variant_5"
+            "splat:variant_5",
+            "splat:variant_6"
           ]
         }
       },
@@ -105,7 +111,8 @@
             "splat:variant_2",
             "splat:variant_3",
             "splat:variant_4",
-            "splat:variant_5"
+            "splat:variant_5",
+            "splat:variant_6"
           ]
         }
       },
@@ -121,7 +128,8 @@
             "splat:variant_1",
             "splat:variant_3",
             "splat:variant_4",
-            "splat:variant_5"
+            "splat:variant_5",
+            "splat:variant_6"
           ]
         }
       },
@@ -137,7 +145,8 @@
             "splat:variant_1",
             "splat:variant_2",
             "splat:variant_4",
-            "splat:variant_5"
+            "splat:variant_5",
+            "splat:variant_6"
           ]
         }
       },
@@ -153,7 +162,8 @@
             "splat:variant_1",
             "splat:variant_2",
             "splat:variant_3",
-            "splat:variant_5"
+            "splat:variant_5",
+            "splat:variant_6"
           ]
         }
       },
@@ -169,7 +179,25 @@
             "splat:variant_1",
             "splat:variant_2",
             "splat:variant_3",
-            "splat:variant_4"
+            "splat:variant_4",
+            "splat:variant_6"
+          ]
+        }
+      },
+      "splat:set_variant_6": {
+        "add": {
+          "component_groups": [
+            "splat:variant_6"
+          ]
+        },
+        "remove": {
+          "component_groups": [
+            "splat:variant_0",
+            "splat:variant_1",
+            "splat:variant_2",
+            "splat:variant_3",
+            "splat:variant_4",
+            "splat:variant_5"
           ]
         }
       }

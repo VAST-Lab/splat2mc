@@ -1,8 +1,8 @@
 import { world, system, ItemStack } from "@minecraft/server";
 import { ActionFormData, FormCancelationReason } from "@minecraft/server-ui";
 
-const PACK_TITLE = "02_SplatMesh_Pack (Shrinkwrap 3D Mesh)";
-const PACK_SUBTITLE = "Clean Shrinkwrap Surface Mesh + 6-View Studio Bake (Faceted)";
+const PACK_TITLE = "02_SplatMesh_Pack (TSDF High-to-Low 3D Mesh)";
+const PACK_SUBTITLE = "TSDF Splat Mesh + Multi-View Connected UV Bake (14000 tris @ 1024px)";
 const CMD_PREFIX = "polymesh";
 const ENTITY_ID = "custom:poly_gem";
 const ITEM_PREFIX = "custom:poly_gem_item_";

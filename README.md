@@ -14,13 +14,13 @@ Place your `.ply` Gaussian Splat files in `source/` and build any combination of
   * **High (`high`):** `32×13` = 416 angles, pitch `±72°` @ `512px`
 * **In-Game Commands:** `/scriptevent imposter:menu`, `:items`, `:spawn <0..N-1|slug>`, `:clear`, `:help`
 
-### 2. `bedrock/02_SplatMesh_Pack` — Quad-Sphere Shrinkwrap Mesh + 6-View Studio Bake
-* **Watertight Quad-Sphere Shrinkwrap (`tools/export_mesh.py`):** Conforms a 6-patch Quad-Sphere onto the outer opacity hull of the 3DGS cloud using pure 4-vertex quads (avoiding Bedrock's `MCPE-186053` missing-triangle bug).
-* **Continuous 6-View Studio Projection:** Renders 6 orthographic 3DGS studio views (Front, Back, Right, Left, Top, Bottom) with Euclidean distance-transform edge dilation so UV borders never bleed background black.
-* **Configurable Mesh Styles:**
-  * **Faceted (`faceted`):** `294` quads (`588` tris) with flat crystal normals
-  * **Smooth (`smooth`, default):** `1,536` quads (`3,072` tris) with smooth normals
-  * **Detailed (`detailed`):** `4,704` quads (`9,408` tris) high-poly hull
+### 2. `bedrock/02_SplatMesh_Pack` — High-to-Low TSDF Splat-to-Mesh Bake
+* **Multi-View TSDF & Marching Cubes (`tools/export_splat_mesh.py`):** Renders 42 Fibonacci-sphere 3DGS RGB-D views (using median depth `T <= 0.5`), fuses them into a `216³` TSDF volume with visual-hull free-space carving (preserving concavities, spires, and tunnels without internal hollow shells), and extracts a clean single-component low-poly shell via QEM decimation + Taubin smoothing. (The prior Quad-Sphere shrinkwrap pack is archived at `bedrock/_archive/mesh_converted_from_splat/`.)
+* **Connected-Chart UV & Occlusion-Tested Bake:** Unwraps overlap-free connected UV charts and bakes visibility-tested multi-view 3DGS colors with distance-transform padding (plus optional `--bake-normals` and `--save-fbx` to `source/FBX_Output/`).
+* **Configurable Bake Tiers:**
+  * **Low (`low`):** `6,000` tris @ `512px` baked diffuse
+  * **Medium (`med`, default):** `14,000` tris @ `1024px` baked diffuse
+  * **High (`high`):** `24,000` tris @ `2048px` baked diffuse
 * **In-Game Commands:** `/scriptevent polymesh:menu`, `:items`, `:spawn <0..N-1|slug>`, `:clear`, `:help`
 
 ### 3. `bedrock/03_SplatRenderer_Pack` — Full Oriented Splat Cloud & Particle Stream *(Legacy Reference)*
@@ -60,14 +60,14 @@ uv run python tools/build_all_packs.py
 # Non-interactive defaults (Packs 01 & 02 at Medium quality)
 uv run python tools/build_all_packs.py -y
 
-# Build Pack 04 (FBX High-to-Low Bake) explicitly
-uv run python tools/build_all_packs.py --pack 4 -y
+# Build Pack 04 (FBX High-to-Low Bake) explicitly and export reduced .fbx + .png copies
+uv run python tools/build_all_packs.py --pack 4 -y --save-fbx
 
 # Build a single pack directly with custom tiers
 uv run python tools/build_imposter_pack.py --tiers low,med
-uv run python tools/build_mesh_pack.py --tiers smooth,faceted
+uv run python tools/build_mesh_pack.py --tiers med --save-fbx
 uv run python tools/build_splat_pack.py --tiers 1500
-uv run python tools/build_fbx_pack.py --tiers med
+uv run python tools/build_fbx_pack.py --tiers med --save-fbx
 ```
 
 ### Imposter Preview Lab

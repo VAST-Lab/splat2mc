@@ -69,7 +69,7 @@ def prompt_pack_selection() -> list[str]:
     print("=== splat2mc Bedrock Pack Builder ===")
     print("Which pack(s) do you want to rebuild?")
     print("  [1] 01_SplatImposter_Pack  (Spherical Imposter)")
-    print("  [2] 02_SplatMesh_Pack      (Shrinkwrap 3D Mesh)")
+    print("  [2] 02_SplatMesh_Pack      (TSDF Splat-to-Mesh Bake)")
     print("  [3] 03_SplatRenderer_Pack  (Full Gaussian Splat Cloud)")
     print("  [4] 04_FBXMesh_Pack        (High-to-Low FBX Bake)")
     print("  [A] Active packs (1 & 2)   [Default]")
@@ -97,11 +97,22 @@ def main() -> None:
     )
     parser.add_argument("--source-dir", type=Path, default=None, help="Source .ply directory (default: source/)")
     parser.add_argument("--fbx-dir", type=Path, default=None, help="Source .fbx directory for pack 04 (default: source/FBX/)")
-    parser.add_argument("--tiers", type=str, default=None, help="Override quality tiers (e.g. med, smooth, all)")
+    parser.add_argument("--tiers", type=str, default=None, help="Override quality tiers (e.g. low, med, high, all)")
     parser.add_argument(
         "--bake-normals",
         action="store_true",
-        help="Also bake tangent-space normal maps for pack 04 (off by default)",
+        help="Also bake tangent-space normal maps for packs 02 & 04 (off by default)",
+    )
+    parser.add_argument(
+        "--save-fbx",
+        action="store_true",
+        help="Also save reduced .fbx + _diffuse.png copies to source/FBX_Output/ (packs 02 & 04)",
+    )
+    parser.add_argument(
+        "--fbx-out-dir",
+        type=Path,
+        default=None,
+        help="Output folder for --save-fbx (default: source/FBX_Output/)",
     )
     parser.add_argument("-y", "--yes", action="store_true", help="Non-interactive mode (use default medium quality)")
     args = parser.parse_args()
@@ -132,12 +143,32 @@ def main() -> None:
         else:
             chosen_tiers[pid] = prompt_quality_tiers(name, tier_defs, default_keys)
 
+    save_fbx = args.save_fbx
+    if (
+        not save_fbx
+        and not args.yes
+        and args.pack is None
+        and any(p in selected_packs for p in ("02", "04"))
+    ):
+        try:
+            ans = input("\nSave reduced .fbx + _diffuse.png copies to source/FBX_Output/? [y/N]: ").strip().lower()
+        except EOFError:
+            ans = ""
+        save_fbx = ans in ("y", "yes")
+
     t0 = time.time()
     for pid in selected_packs:
         if pid == "01":
             build_imposter_pack(repo_root, source_dir=args.source_dir, tiers=chosen_tiers[pid])
         elif pid == "02":
-            build_mesh_pack(repo_root, source_dir=args.source_dir, tiers=chosen_tiers[pid])
+            build_mesh_pack(
+                repo_root,
+                source_dir=args.source_dir,
+                tiers=chosen_tiers[pid],
+                bake_normals=args.bake_normals,
+                save_fbx=save_fbx,
+                fbx_out_dir=args.fbx_out_dir,
+            )
         elif pid == "03":
             build_splat_pack(repo_root, source_dir=args.source_dir, tiers=chosen_tiers[pid])
         elif pid == "04":
@@ -146,6 +177,8 @@ def main() -> None:
                 source_dir=args.fbx_dir,
                 tiers=chosen_tiers[pid],
                 bake_normals=args.bake_normals,
+                save_fbx=save_fbx,
+                fbx_out_dir=args.fbx_out_dir,
             )
 
     print(f"\n✓ Finished building selected packs ({', '.join(selected_packs)}) in {time.time() - t0:.2f}s!")

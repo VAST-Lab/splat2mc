@@ -1,6 +1,6 @@
 @echo off
 setlocal
-echo Installing 02 Shrinkwrap PolyMesh Pack to Bedrock development folders...
+echo Installing 02 Splat High-to-Low Mesh Pack to Bedrock development folders...
 
 set "BEDROCK_DEV=%appdata%\Minecraft Bedrock\Users\Shared\games\com.mojang"
 if not exist "%BEDROCK_DEV%" (
