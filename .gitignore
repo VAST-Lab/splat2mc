@@ -44,3 +44,4 @@ splats/*.ply
 # OS
 .DS_Store
 Thumbs.db
+shim-start.lock

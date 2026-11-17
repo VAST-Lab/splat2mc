@@ -18,9 +18,9 @@ Place your `.ply` Gaussian Splat files in `source/` and build any combination of
 * **Multi-View TSDF & Marching Cubes (`tools/export_splat_mesh.py`):** Renders 42 Fibonacci-sphere 3DGS RGB-D views (using median depth `T <= 0.5`), fuses them into a `216³` TSDF volume with visual-hull free-space carving (preserving concavities, spires, and tunnels without internal hollow shells), and extracts a clean single-component low-poly shell via QEM decimation + Taubin smoothing. (The prior Quad-Sphere shrinkwrap pack is archived at `bedrock/_archive/mesh_converted_from_splat/`.)
 * **Connected-Chart UV & Occlusion-Tested Bake:** Unwraps overlap-free connected UV charts and bakes visibility-tested multi-view 3DGS colors with distance-transform padding (plus optional `--bake-normals` and `--save-fbx` to `source/FBX_Output/`).
 * **Configurable Bake Tiers:**
-  * **Low (`low`):** `6,000` tris @ `512px` baked diffuse
-  * **Medium (`med`, default):** `14,000` tris @ `1024px` baked diffuse
-  * **High (`high`):** `24,000` tris @ `2048px` baked diffuse
+  * **Low (`low`):** `6,000` tris @ `1024px` baked diffuse
+  * **Medium (`med`, default):** `14,000` tris @ `2048px` baked diffuse
+  * **High (`high`):** `24,000` tris @ `4096px` baked diffuse
 * **In-Game Commands:** `/scriptevent polymesh:menu`, `:items`, `:spawn <0..N-1|slug>`, `:clear`, `:help`
 
 ### 3. `bedrock/03_SplatRenderer_Pack` — Full Oriented Splat Cloud & Particle Stream *(Legacy Reference)*

@@ -141,6 +141,8 @@ def test_pack_02_splat_high_to_low_mesh():
     _assert_single_component_degenerate_quad_pack(
         rp_dir, prefix="poly_gem", tex_prefix="poly_gem_tex", variant_count=len(ply_files), max_polys=14000
     )
+    with Image.open(rp_dir / "textures" / "entity" / "poly_gem_tex_0.png") as tex0:
+        assert tex0.size == (2048, 2048)
 
     main_js = (bp_dir / "scripts" / "main.js").read_text(encoding="utf-8")
     assert "openGemMenu" in main_js
