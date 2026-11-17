@@ -122,7 +122,7 @@ def batch(splat_dir: Path, output: Path, max_particles: int):
 @click.option(
     "-o", "--output",
     type=click.Path(path_type=Path),
-    default=Path("./bedrock/01_Imposter_Pack/Imposter_RP/textures/entity/spritesheet_1.png"),
+    default=Path("./bedrock/01_SplatImposter_Pack/SplatImposter_RP/textures/entity/spritesheet_1.png"),
     help="Output spherical spritesheet PNG path",
 )
 @click.option("--icon-out", type=click.Path(path_type=Path), default=None, help="Optional 128x128 item icon PNG path")
@@ -159,20 +159,20 @@ def render_imposter_cmd(
 @click.option(
     "--geo-out",
     type=click.Path(path_type=Path),
-    default=Path("./bedrock/02_Poly_Mesh_Pack/PolyMesh_RP/models/entity/poly_gem_0.geo.json"),
+    default=Path("./bedrock/02_SplatMesh_Pack/SplatMesh_RP/models/entity/poly_gem_0.geo.json"),
     help="Output Bedrock .geo.json path",
 )
 @click.option(
     "--tex-out",
     type=click.Path(path_type=Path),
-    default=Path("./bedrock/02_Poly_Mesh_Pack/PolyMesh_RP/textures/entity/poly_gem_tex_0.png"),
+    default=Path("./bedrock/02_SplatMesh_Pack/SplatMesh_RP/textures/entity/poly_gem_tex_0.png"),
     help="Output baked RGBA 6-view texture atlas path",
 )
 @click.option(
     "-m", "--mode",
     type=click.Choice(["smooth", "detailed", "faceted"]),
     default="smooth",
-    help="Shrinkwrap mesh style (smooth=1280f, detailed=5120f, faceted=320f)",
+    help="Shrinkwrap mesh style (smooth=1536q, detailed=4704q, faceted=294q)",
 )
 @click.option("-s", "--size", type=float, default=24.0, help="Model size in Bedrock units (16 = 1 block)")
 @click.option("--hue-shift", type=float, default=0.0, help="Hue shift in degrees")
@@ -200,12 +200,12 @@ def export_mesh_cmd(
 @main.command("build-gallery")
 @click.option(
     "--pack",
-    type=click.Choice(["all", "01", "02", "03", "imposter", "polymesh", "splat"]),
-    default="all",
-    help="Which Bedrock pack to build (default: all)",
+    type=click.Choice(["active", "all", "01", "02", "03", "imposter", "polymesh", "splat"]),
+    default="active",
+    help="Which Bedrock pack(s) to build (default: active = 01 & 02)",
 )
 def build_gallery_cmd(pack: str):
-    """Build the 3-tier Bedrock Gem packs (01_Imposter_Pack, 02_Poly_Mesh_Pack, 03_Full_GS_Pack)."""
+    """Build Bedrock Gem packs (01_SplatImposter_Pack, 02_SplatMesh_Pack, 03_SplatRenderer_Pack)."""
     import sys as _sys
     from build_gallery import main as _bg_main
 

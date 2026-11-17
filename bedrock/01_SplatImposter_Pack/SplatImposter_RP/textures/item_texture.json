@@ -19,6 +19,30 @@
     },
     "gem_5": {
       "textures": "textures/items/gem_5"
+    },
+    "gem_6": {
+      "textures": "textures/items/gem_6"
+    },
+    "gem_7": {
+      "textures": "textures/items/gem_7"
+    },
+    "gem_8": {
+      "textures": "textures/items/gem_8"
+    },
+    "gem_9": {
+      "textures": "textures/items/gem_9"
+    },
+    "gem_10": {
+      "textures": "textures/items/gem_10"
+    },
+    "gem_11": {
+      "textures": "textures/items/gem_11"
+    },
+    "gem_12": {
+      "textures": "textures/items/gem_12"
+    },
+    "gem_13": {
+      "textures": "textures/items/gem_13"
     }
   }
 }

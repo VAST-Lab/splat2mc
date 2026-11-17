@@ -15,7 +15,7 @@
         "duration": 0.25
       },
       "minecraft:icon": {
-        "texture": "gem_1"
+        "texture": "gem_0"
       },
       "minecraft:display_name": {
         "value": "\u2726 Imposter Gem Catalog"

@@ -221,11 +221,12 @@ class GaussianScene:
         raw_y = np.array(v["y"], dtype=np.float32)
         raw_z = np.array(v["z"], dtype=np.float32)
 
-        op = (
-            1.0 / (1.0 + np.exp(-np.array(v["opacity"], dtype=np.float32)))
-            if "opacity" in v.data.dtype.names
-            else np.ones_like(raw_x)
-        )
+        if "opacity" in v.data.dtype.names:
+            op = 1.0 / (1.0 + np.exp(-np.array(v["opacity"], dtype=np.float32)))
+        elif "opacity_linear" in v.data.dtype.names:
+            op = np.clip(np.array(v["opacity_linear"], dtype=np.float32), 0.0, 1.0)
+        else:
+            op = np.ones_like(raw_x)
         sx = np.exp(np.array(v["scale_0"], dtype=np.float32))
         sy = np.exp(np.array(v["scale_1"], dtype=np.float32))
         sz = np.exp(np.array(v["scale_2"], dtype=np.float32))
@@ -246,7 +247,9 @@ class GaussianScene:
         z = -raw_z[mask]
 
         # Robustly trim spatial outliers (beyond 1st..99th percentile box of opaque core)
-        core_sel = op[mask] > np.percentile(op[mask], 50)
+        core_sel = op[mask] >= np.percentile(op[mask], 50)
+        if not np.any(core_sel):
+            core_sel = np.ones(len(mask), dtype=bool)
         x_lo, x_hi = np.percentile(x[core_sel], [1, 99])
         y_lo, y_hi = np.percentile(y[core_sel], [1, 99])
         z_lo, z_hi = np.percentile(z[core_sel], [1, 99])
@@ -323,16 +326,23 @@ class GaussianScene:
             np.array(v["f_dc_1"], dtype=np.float32)[mask],
             np.array(v["f_dc_2"], dtype=np.float32)[mask],
         ])
-        self.has_rest = "f_rest_0" in v.data.dtype.names and "f_rest_44" in v.data.dtype.names
+        n_rest = sum(1 for name in v.data.dtype.names if name.startswith("f_rest_"))
+        k_per_ch = n_rest // 3
+        self.has_rest = k_per_ch in (3, 8, 15) and f"f_rest_{n_rest - 1}" in v.data.dtype.names
+        self.f_rest = np.zeros((len(mask), 45), dtype=np.float32)
         if self.has_rest:
-            rest_cols = [np.array(v[f"f_rest_{i}"], dtype=np.float32)[mask] for i in range(45)]
-            self.f_rest = np.column_stack(rest_cols)
+            for ch in range(3):
+                for j in range(k_per_ch):
+                    self.f_rest[:, ch * 15 + j] = np.array(
+                        v[f"f_rest_{ch * k_per_ch + j}"], dtype=np.float32
+                    )[mask]
+            sh_deg = {3: "1", 8: "2", 15: "3"}[k_per_ch]
         else:
-            self.f_rest = np.zeros((len(mask), 45), dtype=np.float32)
+            sh_deg = "0"
 
         print(
             f"Loaded {ply_file.name}: {len(self.x):,} active splats "
-            f"(span={self.span:.2f}, SH_deg={'3' if self.has_rest else '0'}) in {time.time() - t0:.2f}s"
+            f"(span={self.span:.2f}, SH_deg={sh_deg}) in {time.time() - t0:.2f}s"
         )
 
     def render_view(

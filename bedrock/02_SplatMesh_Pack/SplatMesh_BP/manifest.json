@@ -2,7 +2,7 @@
   "format_version": 2,
   "header": {
     "name": "02 Shrinkwrap PolyMesh Pack BP",
-    "description": "Tier 2: Shrinkwrap 3DGS surface mesh + 6-view studio bake (Smooth, Detailed, and Faceted options)",
+    "description": "Tier 2: Quad-Sphere Shrinkwrap 3DGS mesh + 6-view studio bake (Faceted)",
     "uuid": "b2024991-61e0-49f1-9c2a-592837164501",
     "version": [
       1,

@@ -9,11 +9,19 @@
       "textures": {
         "default": "textures/entity/poly_gem_tex_0",
         "gem_0": "textures/entity/poly_gem_tex_0",
-        "gem_1": "textures/entity/poly_gem_tex_0",
-        "gem_2": "textures/entity/poly_gem_tex_0",
-        "gem_3": "textures/entity/poly_gem_tex_1",
-        "gem_4": "textures/entity/poly_gem_tex_1",
-        "gem_5": "textures/entity/poly_gem_tex_1"
+        "gem_1": "textures/entity/poly_gem_tex_1",
+        "gem_2": "textures/entity/poly_gem_tex_2",
+        "gem_3": "textures/entity/poly_gem_tex_3",
+        "gem_4": "textures/entity/poly_gem_tex_4",
+        "gem_5": "textures/entity/poly_gem_tex_5",
+        "gem_6": "textures/entity/poly_gem_tex_6",
+        "gem_7": "textures/entity/poly_gem_tex_7",
+        "gem_8": "textures/entity/poly_gem_tex_8",
+        "gem_9": "textures/entity/poly_gem_tex_9",
+        "gem_10": "textures/entity/poly_gem_tex_10",
+        "gem_11": "textures/entity/poly_gem_tex_11",
+        "gem_12": "textures/entity/poly_gem_tex_12",
+        "gem_13": "textures/entity/poly_gem_tex_13"
       },
       "geometry": {
         "default": "geometry.poly_gem_0",
@@ -22,7 +30,15 @@
         "gem_2": "geometry.poly_gem_2",
         "gem_3": "geometry.poly_gem_3",
         "gem_4": "geometry.poly_gem_4",
-        "gem_5": "geometry.poly_gem_5"
+        "gem_5": "geometry.poly_gem_5",
+        "gem_6": "geometry.poly_gem_6",
+        "gem_7": "geometry.poly_gem_7",
+        "gem_8": "geometry.poly_gem_8",
+        "gem_9": "geometry.poly_gem_9",
+        "gem_10": "geometry.poly_gem_10",
+        "gem_11": "geometry.poly_gem_11",
+        "gem_12": "geometry.poly_gem_12",
+        "gem_13": "geometry.poly_gem_13"
       },
       "render_controllers": [
         "controller.render.poly_gem"

@@ -1,8 +1,16 @@
 entity.custom:imposter.name=Gaussian Splat Imposter Gem
-item.custom:gem_item_0.name=✦ Citrine Cluster [Low: 12x5 = 60 Angles, 256px]
-item.custom:gem_item_1.name=✦ Citrine Cluster [Medium: 32x19 = 608 Angles, 256px]
-item.custom:gem_item_2.name=✦ Citrine Cluster [High: 32x13 = 416 Angles, 512px]
-item.custom:gem_item_3.name=✦ Amethyst Geode [Low: 12x5 = 60 Angles, 256px]
-item.custom:gem_item_4.name=✦ Amethyst Geode [Medium: 32x19 = 608 Angles, 256px]
-item.custom:gem_item_5.name=✦ Amethyst Geode [High: 32x13 = 416 Angles, 512px]
+item.custom:gem_item_0.name=✦ Calcite
+item.custom:gem_item_1.name=✦ Florite
+item.custom:gem_item_2.name=✦ Geode Round
+item.custom:gem_item_3.name=✦ Gold Nugget
+item.custom:gem_item_4.name=✦ Iron Stone Quartz
+item.custom:gem_item_5.name=✦ Malachite
+item.custom:gem_item_6.name=✦ Purple Quartz
+item.custom:gem_item_7.name=✦ Red Flat 01
+item.custom:gem_item_8.name=✦ Rhodochrosite
+item.custom:gem_item_9.name=✦ Sphalerite
+item.custom:gem_item_10.name=✦ Turqouise
+item.custom:gem_item_11.name=✦ Weloganite
+item.custom:gem_item_12.name=✦ White Crystal Quartz
+item.custom:gem_item_13.name=✦ White Orange Quartz
 item.custom:imposter_menu.name=✦ Imposter Gem Catalog

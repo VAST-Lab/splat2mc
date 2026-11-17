@@ -1,16 +1,17 @@
 import { world, system, ItemStack } from "@minecraft/server";
 import { ActionFormData, FormCancelationReason } from "@minecraft/server-ui";
 
-const PACK_TITLE = "01_Imposter_Pack (Spherical Imposter)";
-const PACK_SUBTITLE = "Angle-Pinned 3DGS Imposter (Low 12x5 256px, Med 32x19 256px, High 32x13 512px)";
+const PACK_TITLE = "01_SplatImposter_Pack (Spherical Imposter)";
+const PACK_SUBTITLE = "Angle-Pinned 3DGS Imposter (Medium (32x19 256px))";
 const CMD_PREFIX = "imposter";
 const ENTITY_ID = "custom:imposter";
 const ITEM_PREFIX = "custom:gem_item_";
 const ICON_PREFIX = "textures/items/gem_";
 const MENU_ITEM_ID = "custom:imposter_menu";
 const CATALOG_NAME = "Imposter Gem Catalog";
-const GEM_NAMES = ["Citrine Cluster [Low: 12x5 = 60 Angles, 256px]", "Citrine Cluster [Medium: 32x19 = 608 Angles, 256px]", "Citrine Cluster [High: 32x13 = 416 Angles, 512px]", "Amethyst Geode [Low: 12x5 = 60 Angles, 256px]", "Amethyst Geode [Medium: 32x19 = 608 Angles, 256px]", "Amethyst Geode [High: 32x13 = 416 Angles, 512px]"];
-const SLUG_MAP = {"low_citrine": 0, "med_citrine": 1, "high_citrine": 2, "low_amethyst": 3, "med_amethyst": 4, "high_amethyst": 5, "0": 0, "1": 1, "2": 2, "3": 3, "4": 4, "5": 5};
+const GEM_NAMES = ["Calcite", "Florite", "Geode Round", "Gold Nugget", "Iron Stone Quartz", "Malachite", "Purple Quartz", "Red Flat 01", "Rhodochrosite", "Sphalerite", "Turqouise", "Weloganite", "White Crystal Quartz", "White Orange Quartz"];
+const PRIMARY_INDICES = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13];
+const SLUG_MAP = {"calcite": 0, "florite": 1, "geode_round": 2, "gold_nugget": 3, "iron_stone_quartz": 4, "malachite": 5, "purple_quartz": 6, "red_flat_01": 7, "rhodochrosite": 8, "sphalerite": 9, "turqouise": 10, "weloganite": 11, "white_crystal_quartz": 12, "white_orange_quartz": 13, "0": 0, "1": 1, "2": 2, "3": 3, "4": 4, "5": 5, "6": 6, "7": 7, "8": 8, "9": 9, "10": 10, "11": 11, "12": 12, "13": 13};
 
 const interactCooldown = new Map();
 const greetedPlayers = new Set();
@@ -73,12 +74,12 @@ function giveGemItem(player, variant) {
 	player.onScreenDisplay.setActionBar(`§aAdded §f${GEM_NAMES[variant]} §ato inventory`);
 }
 
-function giveAllGems(player) {
-	for (let i = 0; i < GEM_NAMES.length; i++) {
-		addOrDropItem(player, createGemItem(i));
+function giveGemBatch(player, indices) {
+	for (const idx of indices) {
+		addOrDropItem(player, createGemItem(idx));
 	}
 	player.dimension.playSound("random.levelup", player.location, { volume: 0.6, pitch: 1.4 });
-	player.onScreenDisplay.setActionBar(`§aAdded all ${GEM_NAMES.length} gems to inventory!`);
+	player.onScreenDisplay.setActionBar(`§aAdded ${indices.length} gems to inventory!`);
 }
 
 function clearSpawnedGems(player) {
@@ -105,7 +106,7 @@ export async function openGemMenu(player) {
 		.title(`✦ ${CATALOG_NAME}`)
 		.body("§7Select a gem to add to your inventory.\n§8Place: Interact block | Pick up: Crouch + Interact");
 
-	form.button(`§a✦ Give All ${GEM_NAMES.length} Gems`, `${ICON_PREFIX}1`);
+	form.button("\u00a7a\u2726 Give All 14 Gems", `${ICON_PREFIX}0`);
 	for (let i = 0; i < GEM_NAMES.length; i++) {
 		form.button(GEM_NAMES[i], `${ICON_PREFIX}${i}`);
 	}
@@ -116,7 +117,7 @@ export async function openGemMenu(player) {
 
 	const sel = res.selection;
 	if (sel === 0) {
-		giveAllGems(player);
+		giveGemBatch(player, PRIMARY_INDICES);
 	} else if (sel >= 1 && sel <= GEM_NAMES.length) {
 		giveGemItem(player, sel - 1);
 	} else if (sel === GEM_NAMES.length + 1) {
@@ -133,7 +134,7 @@ export function initPlayer(player) {
 
 export function printPackHelp(player) {
 	player.sendMessage(`§b§l[${PACK_TITLE}] §r§7- ${PACK_SUBTITLE}`);
-	player.sendMessage(`  §e/scriptevent ${CMD_PREFIX}:menu §7- Open Gem Picker UI | §e:items §7- Give all 6`);
+	player.sendMessage(`  §e/scriptevent ${CMD_PREFIX}:menu §7- Open Gem Picker UI | §e:items §7- Give primary gems`);
 	player.sendMessage(`  §a/scriptevent ${CMD_PREFIX}:spawn <0-${GEM_NAMES.length - 1}> §7- Spawn in front | §e:clear §7- Clear`);
 	player.sendMessage("§dControls: §fInteract Block §7to Place | §fCrouch + Interact §7to Pick Up");
 }
@@ -270,7 +271,7 @@ world.beforeEvents.playerInteractWithBlock.subscribe((event) => {
 	});
 });
 
-// 3. COMMAND HANDLER: `/scriptevent <prefix>:menu`, `:spawn <0..5>`, `:items`, `:clear`, `:help`
+// 3. COMMAND HANDLER: `/scriptevent <prefix>:menu`, `:spawn <0..N-1>`, `:items`, `:clear`, `:help`
 system.afterEvents.scriptEventReceive.subscribe((event) => {
 	const id = event.id.toLowerCase();
 	const player = event.sourceEntity;
@@ -298,7 +299,8 @@ system.afterEvents.scriptEventReceive.subscribe((event) => {
 	}
 
 	if (id === `${CMD_PREFIX}:items` || id === "gem:items") {
-		giveAllGems(player);
+		const indices = msg === "all" ? GEM_NAMES.map((_, i) => i) : PRIMARY_INDICES;
+		giveGemBatch(player, indices);
 		return;
 	}
 

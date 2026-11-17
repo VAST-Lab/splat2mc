@@ -15,7 +15,7 @@
         "duration": 0.25
       },
       "minecraft:icon": {
-        "texture": "poly_gem_1"
+        "texture": "poly_gem_0"
       },
       "minecraft:display_name": {
         "value": "\u2726 PolyMesh Gem Catalog"

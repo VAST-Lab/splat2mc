@@ -37,6 +37,46 @@
         "minecraft:variant": {
           "value": 5
         }
+      },
+      "splat:variant_6": {
+        "minecraft:variant": {
+          "value": 6
+        }
+      },
+      "splat:variant_7": {
+        "minecraft:variant": {
+          "value": 7
+        }
+      },
+      "splat:variant_8": {
+        "minecraft:variant": {
+          "value": 8
+        }
+      },
+      "splat:variant_9": {
+        "minecraft:variant": {
+          "value": 9
+        }
+      },
+      "splat:variant_10": {
+        "minecraft:variant": {
+          "value": 10
+        }
+      },
+      "splat:variant_11": {
+        "minecraft:variant": {
+          "value": 11
+        }
+      },
+      "splat:variant_12": {
+        "minecraft:variant": {
+          "value": 12
+        }
+      },
+      "splat:variant_13": {
+        "minecraft:variant": {
+          "value": 13
+        }
       }
     },
     "components": {
@@ -89,7 +129,15 @@
             "splat:variant_2",
             "splat:variant_3",
             "splat:variant_4",
-            "splat:variant_5"
+            "splat:variant_5",
+            "splat:variant_6",
+            "splat:variant_7",
+            "splat:variant_8",
+            "splat:variant_9",
+            "splat:variant_10",
+            "splat:variant_11",
+            "splat:variant_12",
+            "splat:variant_13"
           ]
         }
       },
@@ -105,7 +153,15 @@
             "splat:variant_2",
             "splat:variant_3",
             "splat:variant_4",
-            "splat:variant_5"
+            "splat:variant_5",
+            "splat:variant_6",
+            "splat:variant_7",
+            "splat:variant_8",
+            "splat:variant_9",
+            "splat:variant_10",
+            "splat:variant_11",
+            "splat:variant_12",
+            "splat:variant_13"
           ]
         }
       },
@@ -121,7 +177,15 @@
             "splat:variant_1",
             "splat:variant_3",
             "splat:variant_4",
-            "splat:variant_5"
+            "splat:variant_5",
+            "splat:variant_6",
+            "splat:variant_7",
+            "splat:variant_8",
+            "splat:variant_9",
+            "splat:variant_10",
+            "splat:variant_11",
+            "splat:variant_12",
+            "splat:variant_13"
           ]
         }
       },
@@ -137,7 +201,15 @@
             "splat:variant_1",
             "splat:variant_2",
             "splat:variant_4",
-            "splat:variant_5"
+            "splat:variant_5",
+            "splat:variant_6",
+            "splat:variant_7",
+            "splat:variant_8",
+            "splat:variant_9",
+            "splat:variant_10",
+            "splat:variant_11",
+            "splat:variant_12",
+            "splat:variant_13"
           ]
         }
       },
@@ -153,7 +225,15 @@
             "splat:variant_1",
             "splat:variant_2",
             "splat:variant_3",
-            "splat:variant_5"
+            "splat:variant_5",
+            "splat:variant_6",
+            "splat:variant_7",
+            "splat:variant_8",
+            "splat:variant_9",
+            "splat:variant_10",
+            "splat:variant_11",
+            "splat:variant_12",
+            "splat:variant_13"
           ]
         }
       },
@@ -169,7 +249,207 @@
             "splat:variant_1",
             "splat:variant_2",
             "splat:variant_3",
-            "splat:variant_4"
+            "splat:variant_4",
+            "splat:variant_6",
+            "splat:variant_7",
+            "splat:variant_8",
+            "splat:variant_9",
+            "splat:variant_10",
+            "splat:variant_11",
+            "splat:variant_12",
+            "splat:variant_13"
+          ]
+        }
+      },
+      "splat:set_variant_6": {
+        "add": {
+          "component_groups": [
+            "splat:variant_6"
+          ]
+        },
+        "remove": {
+          "component_groups": [
+            "splat:variant_0",
+            "splat:variant_1",
+            "splat:variant_2",
+            "splat:variant_3",
+            "splat:variant_4",
+            "splat:variant_5",
+            "splat:variant_7",
+            "splat:variant_8",
+            "splat:variant_9",
+            "splat:variant_10",
+            "splat:variant_11",
+            "splat:variant_12",
+            "splat:variant_13"
+          ]
+        }
+      },
+      "splat:set_variant_7": {
+        "add": {
+          "component_groups": [
+            "splat:variant_7"
+          ]
+        },
+        "remove": {
+          "component_groups": [
+            "splat:variant_0",
+            "splat:variant_1",
+            "splat:variant_2",
+            "splat:variant_3",
+            "splat:variant_4",
+            "splat:variant_5",
+            "splat:variant_6",
+            "splat:variant_8",
+            "splat:variant_9",
+            "splat:variant_10",
+            "splat:variant_11",
+            "splat:variant_12",
+            "splat:variant_13"
+          ]
+        }
+      },
+      "splat:set_variant_8": {
+        "add": {
+          "component_groups": [
+            "splat:variant_8"
+          ]
+        },
+        "remove": {
+          "component_groups": [
+            "splat:variant_0",
+            "splat:variant_1",
+            "splat:variant_2",
+            "splat:variant_3",
+            "splat:variant_4",
+            "splat:variant_5",
+            "splat:variant_6",
+            "splat:variant_7",
+            "splat:variant_9",
+            "splat:variant_10",
+            "splat:variant_11",
+            "splat:variant_12",
+            "splat:variant_13"
+          ]
+        }
+      },
+      "splat:set_variant_9": {
+        "add": {
+          "component_groups": [
+            "splat:variant_9"
+          ]
+        },
+        "remove": {
+          "component_groups": [
+            "splat:variant_0",
+            "splat:variant_1",
+            "splat:variant_2",
+            "splat:variant_3",
+            "splat:variant_4",
+            "splat:variant_5",
+            "splat:variant_6",
+            "splat:variant_7",
+            "splat:variant_8",
+            "splat:variant_10",
+            "splat:variant_11",
+            "splat:variant_12",
+            "splat:variant_13"
+          ]
+        }
+      },
+      "splat:set_variant_10": {
+        "add": {
+          "component_groups": [
+            "splat:variant_10"
+          ]
+        },
+        "remove": {
+          "component_groups": [
+            "splat:variant_0",
+            "splat:variant_1",
+            "splat:variant_2",
+            "splat:variant_3",
+            "splat:variant_4",
+            "splat:variant_5",
+            "splat:variant_6",
+            "splat:variant_7",
+            "splat:variant_8",
+            "splat:variant_9",
+            "splat:variant_11",
+            "splat:variant_12",
+            "splat:variant_13"
+          ]
+        }
+      },
+      "splat:set_variant_11": {
+        "add": {
+          "component_groups": [
+            "splat:variant_11"
+          ]
+        },
+        "remove": {
+          "component_groups": [
+            "splat:variant_0",
+            "splat:variant_1",
+            "splat:variant_2",
+            "splat:variant_3",
+            "splat:variant_4",
+            "splat:variant_5",
+            "splat:variant_6",
+            "splat:variant_7",
+            "splat:variant_8",
+            "splat:variant_9",
+            "splat:variant_10",
+            "splat:variant_12",
+            "splat:variant_13"
+          ]
+        }
+      },
+      "splat:set_variant_12": {
+        "add": {
+          "component_groups": [
+            "splat:variant_12"
+          ]
+        },
+        "remove": {
+          "component_groups": [
+            "splat:variant_0",
+            "splat:variant_1",
+            "splat:variant_2",
+            "splat:variant_3",
+            "splat:variant_4",
+            "splat:variant_5",
+            "splat:variant_6",
+            "splat:variant_7",
+            "splat:variant_8",
+            "splat:variant_9",
+            "splat:variant_10",
+            "splat:variant_11",
+            "splat:variant_13"
+          ]
+        }
+      },
+      "splat:set_variant_13": {
+        "add": {
+          "component_groups": [
+            "splat:variant_13"
+          ]
+        },
+        "remove": {
+          "component_groups": [
+            "splat:variant_0",
+            "splat:variant_1",
+            "splat:variant_2",
+            "splat:variant_3",
+            "splat:variant_4",
+            "splat:variant_5",
+            "splat:variant_6",
+            "splat:variant_7",
+            "splat:variant_8",
+            "splat:variant_9",
+            "splat:variant_10",
+            "splat:variant_11",
+            "splat:variant_12"
           ]
         }
       }

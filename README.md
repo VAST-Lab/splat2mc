@@ -1,52 +1,67 @@
 # splat2mc
 
-Convert 3D Gaussian Splats (`.ply`) into Minecraft Bedrock Edition 3-Tier Add-Ons (Angle-Pinned Spherical Imposters, Shrinkwrap `poly_mesh` 3D Models, and Full Oriented Splat Clouds) and Java Edition particle datapacks.
+Convert 3D Gaussian Splats (`.ply`) into Minecraft Bedrock Edition Add-On packs (Angle-Pinned Spherical Imposters, Quad-Sphere Shrinkwrap 3D Meshes, and Full Oriented Splat Clouds) and Java Edition particle datapacks.
 
-![demo](docs/demo.gif)
+## Bedrock Edition Packs (`bedrock/`)
 
-## Bedrock Edition 3-Tier Suite (`bedrock/`)
+Place your `.ply` Gaussian Splat files in `source/` and build any combination of the packs below. Every pack automatically gives players a **Gem Catalog** item on join—right-click/use it (or run `/scriptevent <prefix>:menu`) to open the native Bedrock button menu with 128×128 gem previews, **Interact** on a block to place, and **Crouch + Interact** to pick up.
 
-The `bedrock/` directory is organized into **three separate Add-On packs** that scale upward in complexity and representation fidelity. Each pack prints its available spawn commands in chat automatically when you join the world, spawns **one gem at a time** in front of you, and supports **Crouch + Interact** to pick up any gem and **Interact** on a block to place it down:
+### 1. `bedrock/01_SplatImposter_Pack` — Angle-Pinned Spherical Imposter
+* **Angle-Pinned Frame Alignment:** Locks the double-sided imposter plane (`north` + un-mirrored `south` UV faces) strictly to the discrete baked camera angle (`v.snapped_yaw`, `v.snapped_pitch`) so walking around a gem has zero smooth-tracking jumpiness and zero backface UV flipping.
+* **Configurable Quality Tiers:**
+  * **Low (`low`):** `12×5` = 60 angles, pitch `±60°` @ `256px`
+  * **Medium (`med`, default):** `32×19` = 608 angles, pitch `±72°` @ `256px`
+  * **High (`high`):** `32×13` = 416 angles, pitch `±72°` @ `512px`
+* **In-Game Commands:** `/scriptevent imposter:menu`, `:items`, `:spawn <0..N-1|slug>`, `:clear`, `:help`
 
-### 1. `bedrock/01_Imposter_Pack` — Angle-Pinned Spherical Imposter (3 Quality Tiers)
-* **Angle-Pinned Frame Alignment:** Locks the double-sided imposter plane (`north` + un-mirrored `south` UV faces) strictly to the discrete baked camera angle (`v.snapped_yaw`, `v.snapped_pitch`) so walking around the gem has zero smooth-tracking jumpiness and zero backface UV flipping.
-* **3 Angular Quality Presets Included (Citrine & Amethyst):**
-  * **Low (`12×5` = 60 angles, pitch `±60°`, `256px`):** `/scriptevent imposter:spawn 0` (Citrine) | `3` (Amethyst)
-  * **Medium (`32×19` = 608 angles, pitch `±72°`, `256px`):** `/scriptevent imposter:spawn 1` (Citrine) | `4` (Amethyst)
-  * **High (`32×13` = 416 angles, pitch `±72°`, `512px`):** `/scriptevent imposter:spawn 2` (Citrine) | `5` (Amethyst)
+### 2. `bedrock/02_SplatMesh_Pack` — Quad-Sphere Shrinkwrap Mesh + 6-View Studio Bake
+* **Watertight Quad-Sphere Shrinkwrap (`tools/export_mesh.py`):** Conforms a 6-patch Quad-Sphere onto the outer opacity hull of the 3DGS cloud using pure 4-vertex quads (avoiding Bedrock's `MCPE-186053` missing-triangle bug).
+* **Continuous 6-View Studio Projection:** Renders 6 orthographic 3DGS studio views (Front, Back, Right, Left, Top, Bottom) with Euclidean distance-transform edge dilation so UV borders never bleed background black.
+* **Configurable Mesh Styles:**
+  * **Faceted (`faceted`):** `294` quads (`588` tris) with flat crystal normals
+  * **Smooth (`smooth`, default):** `1,536` quads (`3,072` tris) with smooth normals
+  * **Detailed (`detailed`):** `4,704` quads (`9,408` tris) high-poly hull
+* **In-Game Commands:** `/scriptevent polymesh:menu`, `:items`, `:spawn <0..N-1|slug>`, `:clear`, `:help`
 
-### 2. `bedrock/02_Poly_Mesh_Pack` — Shrinkwrap Surface Map + 6-View Orthographic Bake (3 Mesh Styles)
-* **Shrinkwrap Surface Conforming (`tools/export_mesh.py`):** Conforms a subdivided icosphere onto the outer opacity hull of the 3DGS splat cloud with Laplacian smoothing—producing a 100% manifold, non-self-intersecting 3D crystal mesh.
-* **Continuous 6-View Studio Projection:** Renders 6 orthographic 3DGS studio views (Front, Back, Right, Left, Top, Bottom) with Euclidean distance-transform edge dilation and projects each triangle continuously onto its best-matching view (eliminating per-triangle UV seams).
-* **3 Shrinkwrap Mesh Presets Included (Citrine & Amethyst):**
-  * **Smooth Shrinkwrap (`1,280` tris):** `/scriptevent polymesh:spawn 0` (Citrine) | `3` (Amethyst)
-  * **Detailed Shrinkwrap (`5,120` tris):** `/scriptevent polymesh:spawn 1` (Citrine) | `4` (Amethyst)
-  * **Faceted Crystal (`320` tris):** `/scriptevent polymesh:spawn 2` (Citrine) | `5` (Amethyst)
-
-### 3. `bedrock/03_Full_GS_Pack` — Full Oriented Gaussian Splat Cloud & Particle Stream
-* **Static Splat Cloud Entities (`tools/export_geo_splat.py`):** Pairs a shrunk inner Shrinkwrap depth occluder (`core_mesh`) with 800, 1,500, or 2,400 tangent-aligned elliptical Gaussian splat quads packed into a single `poly_mesh` bone (`splat_cloud`).
-* **3 Splat Density Presets Included (Citrine & Amethyst):**
-  * **800 Surface Splats:** `/scriptevent splat:spawn 0` (Citrine) | `3` (Amethyst)
-  * **1,500 Surface Splats:** `/scriptevent splat:spawn 1` (Citrine) | `4` (Amethyst)
-  * **2,400 Surface Splats:** `/scriptevent splat:spawn 2` (Citrine) | `5` (Amethyst)
-* **Oriented Particle Streamer (`tools/export_oriented.py`):** Look at any block and run `/scriptevent sample:run` to stream 5,000 double-sided oriented Gaussian splat particles.
+### 3. `bedrock/03_SplatRenderer_Pack` — Full Oriented Splat Cloud & Particle Stream *(Legacy Reference)*
+* **Static Splat Cloud Entities (`tools/export_geo_splat.py`):** Pairs inset depth-writing core quads (`core_*`) with quaternion-oriented, anisotropic feathered Gaussian surface splats (`s_*`) at `800`, `1500` (default), or `2500` splat planes.
+* **Oriented Particle Streamer (`tools/export_oriented.py`):** Look at a block and click **Toggle Particle Stream** in the catalog menu (or run `/scriptevent sample:run`) to stream 5,000 double-sided oriented Gaussian splat particles.
+* **In-Game Commands:** `/scriptevent splat:menu`, `:items`, `:spawn <0..N-1|slug>`, `:clear`, `:help`, `sample:run`
 
 ---
 
-## Rebuilding the Packs from CLI
+## Building & Installing Packs
 
+### Windows One-Click Interactive Builder
+Double-click **`build_gems_to_mc.bat`** in the repo root. It will:
+1. Ask which pack(s) to rebuild (defaults to **1 & 2** — `01_SplatImposter_Pack` and `02_SplatMesh_Pack`, leaving `03_SplatRenderer_Pack` untouched).
+2. Ask which quality level(s) to include for each pack (defaults to **Medium** quality).
+3. Clear the target pack folder and rebuild everything from `source/*.ply`.
+
+To install a built pack into Minecraft Bedrock on Windows, double-click `install.cmd` inside that pack's folder (e.g., `bedrock/01_SplatImposter_Pack/install.cmd`).
+
+### Command Line (`uv`)
 ```bash
 # Install dependencies
 uv sync
 
-# Build all 3 Bedrock packs (01_Imposter_Pack, 02_Poly_Mesh_Pack, 03_Full_GS_Pack)
-uv run splat2mc build-gallery
+# Interactive wizard (same as build_gems_to_mc.bat)
+uv run python tools/build_all_packs.py
 
-# Or build a specific pack:
-uv run splat2mc build-gallery --pack 01
-uv run splat2mc build-gallery --pack 02
-uv run splat2mc build-gallery --pack 03
+# Non-interactive defaults (Packs 01 & 02 at Medium quality)
+uv run python tools/build_all_packs.py -y
+
+# Build a single pack directly with custom tiers
+uv run python tools/build_imposter_pack.py --tiers low,med
+uv run python tools/build_mesh_pack.py --tiers smooth,faceted
+uv run python tools/build_splat_pack.py --tiers 1500
+
+# Run validation tests
+uv run pytest -v
 ```
+
+### Imposter Preview Lab
+Open `imposter_demo.html` in a browser to inspect imposter spritesheets and UV angle transitions interactively.
 
 ## License
 

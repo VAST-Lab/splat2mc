@@ -19,6 +19,30 @@
     },
     "poly_gem_5": {
       "textures": "textures/items/poly_gem_5"
+    },
+    "poly_gem_6": {
+      "textures": "textures/items/poly_gem_6"
+    },
+    "poly_gem_7": {
+      "textures": "textures/items/poly_gem_7"
+    },
+    "poly_gem_8": {
+      "textures": "textures/items/poly_gem_8"
+    },
+    "poly_gem_9": {
+      "textures": "textures/items/poly_gem_9"
+    },
+    "poly_gem_10": {
+      "textures": "textures/items/poly_gem_10"
+    },
+    "poly_gem_11": {
+      "textures": "textures/items/poly_gem_11"
+    },
+    "poly_gem_12": {
+      "textures": "textures/items/poly_gem_12"
+    },
+    "poly_gem_13": {
+      "textures": "textures/items/poly_gem_13"
     }
   }
 }
