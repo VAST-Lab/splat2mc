@@ -36,6 +36,7 @@ uv.lock
 *.swo
 
 # Project
+source/*
 output/
 splats/*.ply
 *.ply
