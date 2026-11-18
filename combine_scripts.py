@@ -267,7 +267,7 @@ def balance_and_merge_chunks(chunks, max_count):
 def main():
     parser = argparse.ArgumentParser(description="Combine codebase into XML files.")
     parser.add_argument("target_dir", nargs="?", default=os.getcwd(), help="Target directory to process (defaults to current working directory)")
-    parser.add_argument("--max-files", type=int, default=MAX_FILE_COUNT, help="Maximum number of XML file sets to produce")
+    parser.add_argument("--max-gem_files", type=int, default=MAX_FILE_COUNT, help="Maximum number of XML file sets to produce")
     parser.add_argument("--no-pause", action="store_true", help="Skip the pause at the end (useful for CI/CLI usage)")
     args = parser.parse_args()
 

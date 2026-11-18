@@ -2,7 +2,7 @@
   "format_version": 2,
   "header": {
     "name": "02 Splat High-to-Low Mesh Pack BP",
-    "description": "Tier 2: TSDF High-to-Low 3DGS PolyMesh + Connected UV Bake (14000 tris @ 2048px)",
+    "description": "Tier 2: TSDF High-to-Low 3DGS PolyMesh + Connected UV Bake (24000 tris @ 4096px)",
     "uuid": "b2024991-61e0-49f1-9c2a-592837164501",
     "version": [
       1,

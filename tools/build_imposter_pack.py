@@ -33,7 +33,7 @@ from render_imposter import GaussianScene, render_imposter_atlas
 # Pack 01 Quality & Specification Settings
 # ==============================================================================
 IMPOSTER_SETTINGS = {
-    "source_dir": "source",
+    "source_dir": "gem_files",
     "pack_dir": "bedrock/01_SplatImposter_Pack",
     "bp_name": "SplatImposter_BP",
     "rp_name": "SplatImposter_RP",
@@ -446,8 +446,8 @@ def build_imposter_pack(
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Build Pack 01: 01_SplatImposter_Pack from source/*.ply")
-    parser.add_argument("--source-dir", type=Path, default=None, help="Directory containing .ply files (default: source/)")
+    parser = argparse.ArgumentParser(description="Build Pack 01: 01_SplatImposter_Pack from gem_files/*.ply")
+    parser.add_argument("--source-dir", type=Path, default=None, help="Directory containing .ply files (default: gem_files/)")
     parser.add_argument("--tiers", type=str, default=None, help="Comma-separated tiers: low, med, high, or all")
     parser.add_argument("-y", "--yes", action="store_true", help="Non-interactive mode (use default tier: med)")
     args = parser.parse_args()

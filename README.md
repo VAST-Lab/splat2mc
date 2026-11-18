@@ -4,7 +4,7 @@ Convert 3D Gaussian Splats (`.ply`) into Minecraft Bedrock Edition Add-On packs 
 
 ## Bedrock Edition Packs (`bedrock/`)
 
-Place your `.ply` Gaussian Splat files in `source/` and build any combination of the packs below. Every pack automatically gives players a **Gem Catalog** item on join—right-click/use it (or run `/scriptevent <prefix>:menu`) to open the native Bedrock button menu with 128×128 gem previews, **Interact** on a block to place, and **Crouch + Interact** to pick up.
+Place your `.ply` Gaussian Splat files in `gem_files/` and build any combination of the packs below. Every pack automatically gives players a **Gem Catalog** item on join—right-click/use it (or run `/scriptevent <prefix>:menu`) to open the native Bedrock button menu with 128×128 gem previews, **Interact** on a block to place, and **Crouch + Interact** to pick up.
 
 ### 1. `bedrock/01_SplatImposter_Pack` — Angle-Pinned Spherical Imposter
 * **Angle-Pinned Frame Alignment:** Locks the double-sided imposter plane (`north` + un-mirrored `south` UV faces) strictly to the discrete baked camera angle (`v.snapped_yaw`, `v.snapped_pitch`) so walking around a gem has zero smooth-tracking jumpiness and zero backface UV flipping.
@@ -16,7 +16,7 @@ Place your `.ply` Gaussian Splat files in `source/` and build any combination of
 
 ### 2. `bedrock/02_SplatMesh_Pack` — High-to-Low TSDF Splat-to-Mesh Bake
 * **Multi-View TSDF & Marching Cubes (`tools/export_splat_mesh.py`):** Renders 42 Fibonacci-sphere 3DGS RGB-D views (using median depth `T <= 0.5`), fuses them into a `216³` TSDF volume with visual-hull free-space carving (preserving concavities, spires, and tunnels without internal hollow shells), and extracts a clean single-component low-poly shell via QEM decimation + Taubin smoothing. (The prior Quad-Sphere shrinkwrap pack is archived at `bedrock/_archive/mesh_converted_from_splat/`.)
-* **Connected-Chart UV & Occlusion-Tested Bake:** Unwraps overlap-free connected UV charts and bakes visibility-tested multi-view 3DGS colors with distance-transform padding (plus optional `--bake-normals` and `--save-fbx` to `source/FBX_Output/`).
+* **Connected-Chart UV & Occlusion-Tested Bake:** Unwraps overlap-free connected UV charts and bakes visibility-tested multi-view 3DGS colors with distance-transform padding (plus optional `--bake-normals` and `--save-fbx` to `gem_files/FBX_Output/`).
 * **Configurable Bake Tiers:**
   * **Low (`low`):** `6,000` tris @ `1024px` baked diffuse
   * **Medium (`med`, default):** `14,000` tris @ `2048px` baked diffuse
@@ -29,7 +29,7 @@ Place your `.ply` Gaussian Splat files in `source/` and build any combination of
 * **In-Game Commands:** `/scriptevent splat:menu`, `:items`, `:spawn <0..N-1|slug>`, `:clear`, `:help`, `sample:run`
 
 ### 4. `bedrock/04_FBXMesh_Pack` — High-to-Low Poly FBX Bake *(Optional)*
-* **High-Poly Scan Decimation & Clean (`tools/export_fbx_mesh.py`):** Reads binary FBX photogrammetry scans from `source/FBX/*.fbx` + `*_diffuse.png`, converts Z-up scans to Y-up Minecraft coordinates, keeps the largest connected component (no floating triangles/vertices), performs QEM decimation + gentle Taubin smoothing, and emits 4-vertex degenerate quads (`MCPE-186053` safe).
+* **High-Poly Scan Decimation & Clean (`tools/export_fbx_mesh.py`):** Reads binary FBX photogrammetry scans from `gem_files/FBX/*.fbx` + `*_diffuse.png`, converts Z-up scans to Y-up Minecraft coordinates, keeps the largest connected component (no floating triangles/vertices), performs QEM decimation + gentle Taubin smoothing, and emits 4-vertex degenerate quads (`MCPE-186053` safe).
 * **UV Unwrap & High-to-Low Texture Bake:** Automatically unwraps connected UV charts with distance-transform padding and bakes high-res diffuse textures (plus optional `--bake-normals` PBR tangent-space normal maps, off by default).
 * **Configurable Bake Tiers:**
   * **Low (`low`):** `6,000` tris @ `512px` baked diffuse
@@ -45,7 +45,7 @@ Place your `.ply` Gaussian Splat files in `source/` and build any combination of
 Double-click **`update_pack_gems.bat`** (or `build_gems_to_mc.bat` if present) in the repo root. It will:
 1. Ask which pack(s) to rebuild (defaults to **1 & 2** — `01_SplatImposter_Pack` and `02_SplatMesh_Pack`, leaving `03_SplatRenderer_Pack` and `04_FBXMesh_Pack` untouched unless selected).
 2. Ask which quality level(s) to include for each pack (defaults to **Medium** quality).
-3. Rebuild pack assets from `source/*.ply` (and `source/FBX/*.fbx` for Pack 04) while preserving any existing install scripts (`install.cmd`, `*.bat`, `*.ps1`, `*.sh`) in the pack folders.
+3. Rebuild pack assets from `gem_files/*.ply` (and `gem_files/FBX/*.fbx` for Pack 04) while preserving any existing install scripts (`install.cmd`, `*.bat`, `*.ps1`, `*.sh`) in the pack folders.
 
 To install all built packs into Minecraft Bedrock on Windows, double-click **`install_gems_to_mc.bat`** (or `install.cmd` inside a specific pack's folder).
 

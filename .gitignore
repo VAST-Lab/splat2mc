@@ -36,8 +36,9 @@ uv.lock
 *.swo
 
 # Project
-source/*
-output/
+gem_files/*
+output/*
+gem_files/*
 splats/*.ply
 *.ply
 

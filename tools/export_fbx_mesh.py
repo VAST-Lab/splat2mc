@@ -2,7 +2,7 @@
 """
 FBX High-to-Low Poly Mesh Decimator & Texture Baker for Minecraft Bedrock.
 
-Reads binary Kaydara FBX photogrammetry scans (`source/FBX/*.fbx` + `*_diffuse.png`),
+Reads binary Kaydara FBX photogrammetry scans (`gem_files/FBX/*.fbx` + `*_diffuse.png`),
 cleans & decimates them to a single enclosed, floating-part-free low-poly mesh,
 generates non-overlapping connected-chart UVs, bakes the 8K diffuse map (and
 optional tangent-space normal map) onto the low-poly UVs, and exports a Bedrock

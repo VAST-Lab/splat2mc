@@ -35,7 +35,7 @@ from render_imposter import GaussianScene
 # Pack 03 Quality & Specification Settings
 # ==============================================================================
 SPLAT_SETTINGS = {
-    "source_dir": "source",
+    "source_dir": "gem_files",
     "pack_dir": "bedrock/03_SplatRenderer_Pack",
     "bp_name": "SplatRenderer_BP",
     "rp_name": "SplatRenderer_RP",
@@ -357,7 +357,7 @@ def build_splat_pack(
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Build Pack 03: 03_SplatRenderer_Pack")
-    parser.add_argument("--source-dir", type=Path, default=None, help="Directory containing .ply files (default: source/)")
+    parser.add_argument("--source-dir", type=Path, default=None, help="Directory containing .ply files (default: gem_files/)")
     parser.add_argument("--tiers", type=str, default=None, help="Comma-separated tiers: 800, 1500, 2500, or all")
     parser.add_argument("-y", "--yes", action="store_true", help="Non-interactive mode (use default tier: 1500)")
     args = parser.parse_args()

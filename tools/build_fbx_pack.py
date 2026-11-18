@@ -2,7 +2,7 @@
 """
 Interactive & CLI Builder for Pack 04: `bedrock/04_FBXMesh_Pack` (FBX High-to-Low Poly Bake).
 
-Processes `source/FBX/*.fbx` + `*_diffuse.png` scans into cleaned, single-component
+Processes `gem_files/FBX/*.fbx` + `*_diffuse.png` scans into cleaned, single-component
 low-poly Bedrock `poly_mesh` entities with tightly packed baked diffuse atlases
 (and optional `--bake-normals` tangent-space PBR texture sets).
 """
@@ -47,8 +47,8 @@ from pack_utils import (
 # Pack 04 Quality & Specification Settings
 # ==============================================================================
 FBX_SETTINGS = {
-    "source_dir": "source/FBX",
-    "fbx_out_dir": "source/FBX_Output",
+    "source_dir": "gem_files/FBX",
+    "fbx_out_dir": "gem_files/FBX_Output",
     "pack_dir": "bedrock/04_FBXMesh_Pack",
     "bp_name": "FBXMesh_BP",
     "rp_name": "FBXMesh_RP",
@@ -455,13 +455,13 @@ def build_fbx_pack(
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Build Pack 04: 04_FBXMesh_Pack from source/FBX/*.fbx")
-    parser.add_argument("--source-dir", type=Path, default=None, help="Directory containing .fbx files (default: source/FBX/)")
+    parser = argparse.ArgumentParser(description="Build Pack 04: 04_FBXMesh_Pack from gem_files/FBX/*.fbx")
+    parser.add_argument("--source-dir", type=Path, default=None, help="Directory containing .fbx files (default: gem_files/FBX/)")
     parser.add_argument("--tiers", type=str, default=None, help="Comma-separated tiers: low, med, high, or all")
     parser.add_argument("--bake-normals", action="store_true", help="Bake tangent-space normal maps + PBR texture_set.json")
     parser.add_argument("--smooth-iters", type=int, default=FBX_SETTINGS["smooth_iters"], help="Taubin smoothing iterations (default: 1)")
-    parser.add_argument("--save-fbx", action="store_true", help="Also save reduced .fbx + _diffuse.png to source/FBX_Output/")
-    parser.add_argument("--fbx-out-dir", type=Path, default=None, help="Output folder for --save-fbx (default: source/FBX_Output/)")
+    parser.add_argument("--save-fbx", action="store_true", help="Also save reduced .fbx + _diffuse.png to gem_files/FBX_Output/")
+    parser.add_argument("--fbx-out-dir", type=Path, default=None, help="Output folder for --save-fbx (default: gem_files/FBX_Output/)")
     parser.add_argument("-y", "--yes", action="store_true", help="Non-interactive mode (use default tier: med)")
     args = parser.parse_args()
 
@@ -475,7 +475,7 @@ def main() -> None:
         selected_tiers = prompt_quality_tiers("04_FBXMesh_Pack", FBX_TIERS, FBX_SETTINGS["default_tiers"])
         if not save_fbx:
             try:
-                ans = input("Save reduced .fbx + _diffuse.png copies to source/FBX_Output/? [y/N]: ").strip().lower()
+                ans = input("Save reduced .fbx + _diffuse.png copies to gem_files/FBX_Output/? [y/N]: ").strip().lower()
             except EOFError:
                 ans = ""
             save_fbx = ans in ("y", "yes")

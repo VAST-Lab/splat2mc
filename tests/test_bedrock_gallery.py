@@ -137,7 +137,7 @@ def test_pack_02_splat_high_to_low_mesh():
     assert (bp_dir / "items" / "polymesh_menu.json").exists()
     assert not (rp_dir / "attachables").exists()
 
-    ply_files = sorted((REPO_ROOT / "source").glob("*.ply"), key=lambda p: p.name.lower())
+    ply_files = sorted((REPO_ROOT / "gem_files").glob("*.ply"), key=lambda p: p.name.lower())
     _assert_single_component_degenerate_quad_pack(
         rp_dir, prefix="poly_gem", tex_prefix="poly_gem_tex", variant_count=len(ply_files), max_polys=14000
     )
@@ -149,7 +149,7 @@ def test_pack_02_splat_high_to_low_mesh():
     assert "initPlayer" in main_js
     assert 'const CMD_PREFIX = "polymesh";' in main_js
 
-    fbx_out = REPO_ROOT / "source" / "FBX_Output"
+    fbx_out = REPO_ROOT / "gem_files" / "FBX_Output"
     for p in ply_files:
         assert (fbx_out / f"{p.stem}_splat.fbx").exists()
         assert (fbx_out / f"{p.stem}_splat_diffuse.png").exists()
@@ -195,7 +195,7 @@ def test_pack_04_fbx_mesh_pack():
     assert (bp_dir / "items" / "fbxmesh_menu.json").exists()
     assert not (rp_dir / "attachables").exists()
 
-    fbx_files = sorted((REPO_ROOT / "source" / "FBX").glob("*.fbx"), key=lambda p: p.name.lower())
+    fbx_files = sorted((REPO_ROOT / "gem_files" / "FBX").glob("*.fbx"), key=lambda p: p.name.lower())
     assert len(fbx_files) >= 6
     _assert_single_component_degenerate_quad_pack(
         rp_dir, prefix="fbx_gem", tex_prefix="fbx_gem_tex", variant_count=len(fbx_files), max_polys=16000
@@ -206,7 +206,7 @@ def test_pack_04_fbx_mesh_pack():
     assert "initPlayer" in main_js
     assert 'const CMD_PREFIX = "fbxmesh";' in main_js
 
-    fbx_out = REPO_ROOT / "source" / "FBX_Output"
+    fbx_out = REPO_ROOT / "gem_files" / "FBX_Output"
     for p in fbx_files:
         assert (fbx_out / f"{p.stem}.fbx").exists()
         assert (fbx_out / f"{p.stem}_diffuse.png").exists()

@@ -5,7 +5,7 @@ Interactive & CLI Pack Builder Wizard for the Bedrock 3DGS Gem Packs.
 - Interactive mode (default when run with no flags or via `build_packs.bat`):
   1. Asks which pack(s) to rebuild (default: 1 & 2 — Imposter + Mesh, leaving Pack 03 untouched).
   2. For each selected pack, asks which quality level(s) to include (default: medium quality only).
-  3. Clears each selected pack folder and rebuilds it cleanly from `source/*.ply`.
+  3. Clears each selected pack folder and rebuilds it cleanly from `gem_files/*.ply`.
 - Non-interactive mode: pass `--pack ...` and `-y` / `--tiers ...`.
 """
 import argparse
@@ -95,8 +95,8 @@ def main() -> None:
         default=None,
         help="Pack(s) to build: active (1,2), all (1,2,3,4), or comma-separated 1,2,3,4",
     )
-    parser.add_argument("--source-dir", type=Path, default=None, help="Source .ply directory (default: source/)")
-    parser.add_argument("--fbx-dir", type=Path, default=None, help="Source .fbx directory for pack 04 (default: source/FBX/)")
+    parser.add_argument("--source-dir", type=Path, default=None, help="Source .ply directory (default: gem_files/)")
+    parser.add_argument("--fbx-dir", type=Path, default=None, help="Source .fbx directory for pack 04 (default: gem_files/FBX/)")
     parser.add_argument("--tiers", type=str, default=None, help="Override quality tiers (e.g. low, med, high, all)")
     parser.add_argument(
         "--bake-normals",
@@ -106,13 +106,13 @@ def main() -> None:
     parser.add_argument(
         "--save-fbx",
         action="store_true",
-        help="Also save reduced .fbx + _diffuse.png copies to source/FBX_Output/ (packs 02 & 04)",
+        help="Also save reduced .fbx + _diffuse.png copies to gem_files/FBX_Output/ (packs 02 & 04)",
     )
     parser.add_argument(
         "--fbx-out-dir",
         type=Path,
         default=None,
-        help="Output folder for --save-fbx (default: source/FBX_Output/)",
+        help="Output folder for --save-fbx (default: gem_files/FBX_Output/)",
     )
     parser.add_argument("-y", "--yes", action="store_true", help="Non-interactive mode (use default medium quality)")
     args = parser.parse_args()
@@ -151,7 +151,7 @@ def main() -> None:
         and any(p in selected_packs for p in ("02", "04"))
     ):
         try:
-            ans = input("\nSave reduced .fbx + _diffuse.png copies to source/FBX_Output/? [y/N]: ").strip().lower()
+            ans = input("\nSave reduced .fbx + _diffuse.png copies to gem_files/FBX_Output/? [y/N]: ").strip().lower()
         except EOFError:
             ans = ""
         save_fbx = ans in ("y", "yes")

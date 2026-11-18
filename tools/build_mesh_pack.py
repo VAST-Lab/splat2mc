@@ -36,8 +36,8 @@ from pack_utils import (
 # Pack 02 Quality & Specification Settings
 # ==============================================================================
 MESH_SETTINGS = {
-    "source_dir": "source",
-    "fbx_out_dir": "source/FBX_Output",
+    "source_dir": "gem_files",
+    "fbx_out_dir": "gem_files/FBX_Output",
     "pack_dir": "bedrock/02_SplatMesh_Pack",
     "bp_name": "SplatMesh_BP",
     "rp_name": "SplatMesh_RP",
@@ -428,13 +428,13 @@ def build_mesh_pack(
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Build Pack 02: 02_SplatMesh_Pack from source/*.ply")
-    parser.add_argument("--source-dir", type=Path, default=None, help="Directory containing .ply files (default: source/)")
+    parser = argparse.ArgumentParser(description="Build Pack 02: 02_SplatMesh_Pack from gem_files/*.ply")
+    parser.add_argument("--source-dir", type=Path, default=None, help="Directory containing .ply files (default: gem_files/)")
     parser.add_argument("--tiers", type=str, default=None, help="Comma-separated tiers: low, med, high, or all")
     parser.add_argument("--bake-normals", action="store_true", help="Also bake tangent-space normal maps (off by default)")
     parser.add_argument("--smooth-iters", type=int, default=MESH_SETTINGS["smooth_iters"], help="Taubin smoothing passes (default: 1)")
-    parser.add_argument("--save-fbx", action="store_true", help="Also save reduced .fbx + _diffuse.png to source/FBX_Output/")
-    parser.add_argument("--fbx-out-dir", type=Path, default=None, help="Output folder for --save-fbx (default: source/FBX_Output/)")
+    parser.add_argument("--save-fbx", action="store_true", help="Also save reduced .fbx + _diffuse.png to gem_files/FBX_Output/")
+    parser.add_argument("--fbx-out-dir", type=Path, default=None, help="Output folder for --save-fbx (default: gem_files/FBX_Output/)")
     parser.add_argument("-y", "--yes", action="store_true", help="Non-interactive mode (use default tier: med)")
     args = parser.parse_args()
 
@@ -448,7 +448,7 @@ def main() -> None:
         selected_tiers = prompt_quality_tiers("02_SplatMesh_Pack", MESH_TIERS, MESH_SETTINGS["default_tiers"])
         if not save_fbx:
             try:
-                ans = input("Save reduced .fbx + _diffuse.png copies to source/FBX_Output/? [y/N]: ").strip().lower()
+                ans = input("Save reduced .fbx + _diffuse.png copies to gem_files/FBX_Output/? [y/N]: ").strip().lower()
             except EOFError:
                 ans = ""
             save_fbx = ans in ("y", "yes")
