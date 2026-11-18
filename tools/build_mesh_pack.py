@@ -36,8 +36,8 @@ from pack_utils import (
 # Pack 02 Quality & Specification Settings
 # ==============================================================================
 MESH_SETTINGS = {
-    "source_dir": "gem_files",
-    "fbx_out_dir": "gem_files/FBX_Output",
+    "source_dir": "gem_files/PLY_Reduced",
+    "fbx_out_dir": "gem_files/FBX_Reduced",
     "pack_dir": "bedrock/02_SplatMesh_Pack",
     "bp_name": "SplatMesh_BP",
     "rp_name": "SplatMesh_RP",

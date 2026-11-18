@@ -22,6 +22,9 @@
     },
     "fbx_gem_6": {
       "textures": "textures/items/fbx_gem_6"
+    },
+    "fbx_gem_7": {
+      "textures": "textures/items/fbx_gem_7"
     }
   }
 }

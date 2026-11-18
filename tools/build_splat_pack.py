@@ -35,7 +35,7 @@ from render_imposter import GaussianScene
 # Pack 03 Quality & Specification Settings
 # ==============================================================================
 SPLAT_SETTINGS = {
-    "source_dir": "gem_files",
+    "source_dir": "gem_files/PLY_Reduced",
     "pack_dir": "bedrock/03_SplatRenderer_Pack",
     "bp_name": "SplatRenderer_BP",
     "rp_name": "SplatRenderer_RP",

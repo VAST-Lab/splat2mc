@@ -47,8 +47,8 @@ from pack_utils import (
 # Pack 04 Quality & Specification Settings
 # ==============================================================================
 FBX_SETTINGS = {
-    "source_dir": "gem_files/FBX",
-    "fbx_out_dir": "gem_files/FBX_Output",
+    "source_dir": "gem_files/FBX_Source",
+    "fbx_out_dir": "gem_files/FBX_Reduced",
     "pack_dir": "bedrock/04_FBXMesh_Pack",
     "bp_name": "FBXMesh_BP",
     "rp_name": "FBXMesh_RP",
@@ -63,24 +63,24 @@ FBX_TIERS = [
         "key": "low",
         "label": "Low: 6k tris",
         "tris": 6000,
-        "atlas_res": 512,
-        "description": "Low (6,000 tris @ 512px baked diffuse)",
+        "atlas_res": 1024,
+        "description": "Low (6,000 tris @ 1024px baked diffuse)",
         "is_primary": False,
     },
     {
         "key": "med",
         "label": "Med: 16k tris",
         "tris": 16000,
-        "atlas_res": 1024,
-        "description": "Medium (16,000 tris @ 1024px baked diffuse, recommended)",
+        "atlas_res": 2048,
+        "description": "Medium (16,000 tris @ 2048px baked diffuse, recommended)",
         "is_primary": True,
     },
     {
         "key": "high",
         "label": "High: 28k tris",
         "tris": 28000,
-        "atlas_res": 2048,
-        "description": "High (28,000 tris @ 2048px baked diffuse, high polycount)",
+        "atlas_res": 4096,
+        "description": "High (28,000 tris @ 4096px baked diffuse, high polycount)",
         "is_primary": False,
     },
 ]

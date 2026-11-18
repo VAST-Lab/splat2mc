@@ -2,7 +2,7 @@
   "format_version": 2,
   "header": {
     "name": "04 FBX High-to-Low Mesh Pack BP",
-    "description": "Tier 4: Photogrammetry FBX High-to-Low Poly Bake (16000 tris @ 1024px)",
+    "description": "Tier 4: Photogrammetry FBX High-to-Low Poly Bake (16000 tris @ 2048px)",
     "uuid": "d4044991-61e0-49f1-9c2a-592837164501",
     "version": [
       1,

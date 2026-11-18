@@ -42,6 +42,11 @@
         "minecraft:variant": {
           "value": 6
         }
+      },
+      "splat:variant_7": {
+        "minecraft:variant": {
+          "value": 7
+        }
       }
     },
     "components": {
@@ -95,7 +100,8 @@
             "splat:variant_3",
             "splat:variant_4",
             "splat:variant_5",
-            "splat:variant_6"
+            "splat:variant_6",
+            "splat:variant_7"
           ]
         }
       },
@@ -112,7 +118,8 @@
             "splat:variant_3",
             "splat:variant_4",
             "splat:variant_5",
-            "splat:variant_6"
+            "splat:variant_6",
+            "splat:variant_7"
           ]
         }
       },
@@ -129,7 +136,8 @@
             "splat:variant_3",
             "splat:variant_4",
             "splat:variant_5",
-            "splat:variant_6"
+            "splat:variant_6",
+            "splat:variant_7"
           ]
         }
       },
@@ -146,7 +154,8 @@
             "splat:variant_2",
             "splat:variant_4",
             "splat:variant_5",
-            "splat:variant_6"
+            "splat:variant_6",
+            "splat:variant_7"
           ]
         }
       },
@@ -163,7 +172,8 @@
             "splat:variant_2",
             "splat:variant_3",
             "splat:variant_5",
-            "splat:variant_6"
+            "splat:variant_6",
+            "splat:variant_7"
           ]
         }
       },
@@ -180,7 +190,8 @@
             "splat:variant_2",
             "splat:variant_3",
             "splat:variant_4",
-            "splat:variant_6"
+            "splat:variant_6",
+            "splat:variant_7"
           ]
         }
       },
@@ -197,7 +208,26 @@
             "splat:variant_2",
             "splat:variant_3",
             "splat:variant_4",
-            "splat:variant_5"
+            "splat:variant_5",
+            "splat:variant_7"
+          ]
+        }
+      },
+      "splat:set_variant_7": {
+        "add": {
+          "component_groups": [
+            "splat:variant_7"
+          ]
+        },
+        "remove": {
+          "component_groups": [
+            "splat:variant_0",
+            "splat:variant_1",
+            "splat:variant_2",
+            "splat:variant_3",
+            "splat:variant_4",
+            "splat:variant_5",
+            "splat:variant_6"
           ]
         }
       }
